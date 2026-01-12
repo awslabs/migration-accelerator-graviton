@@ -203,13 +203,11 @@ resource "aws_iam_role_policy" "lambda" {
         Effect = "Allow"
         Action = [
           "batch:ListJobs",
-          "batch:DescribeJobs"
+          "batch:DescribeJobs",
+          "batch:DescribeJobQueues"
         ]
         # Scoped to specific job queue and jobs instead of wildcard
-        Resource = [
-          aws_batch_job_queue.main.arn,
-          "arn:aws:batch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:job/*"
-        ]
+        Resource = "*"
       },
       {
         Effect = "Allow"

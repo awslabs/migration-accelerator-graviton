@@ -76,7 +76,7 @@ resource "aws_lambda_function" "batch_trigger" {
   source_code_hash = data.archive_file.lambda.output_base64sha256
 
   # Concurrent execution limit
-  reserved_concurrent_executions = 50
+  # reserved_concurrent_executions = 50
 
   # VPC Configuration - Use private subnets with NAT Gateway
   vpc_config {

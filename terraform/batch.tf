@@ -18,8 +18,7 @@ resource "aws_batch_compute_environment" "main" {
     min_vcpus     = 0
     max_vcpus     = var.batch_max_vcpus
     desired_vcpus = 0
-
-    subnets            = local.private_subnet_ids
+    subnets = local.public_subnet_ids
     security_group_ids = [aws_security_group.batch_ec2.id]
 
     instance_role = aws_iam_instance_profile.batch_ec2.arn
@@ -38,14 +37,16 @@ resource "aws_batch_job_queue" "main" {
   state    = "ENABLED"
   priority = 1
 
-  compute_environments = [
-    aws_batch_compute_environment.main.arn
-  ]
+  compute_environment_order {
+    order               = 1
+    compute_environment = aws_batch_compute_environment.main.arn
+  }
 
   tags = {
     Name = "graviton-validator-job-queue"
   }
 }
+
 
 # Job Definition
 resource "aws_batch_job_definition" "main" {
