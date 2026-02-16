@@ -120,15 +120,7 @@ class JSONReporter(ReportGenerator):
         components_data = []
         
         for comp_result in components:
-            # For runtime analysis components, use runtime version as type
             component_type = comp_result.component.component_type
-            if (comp_result.component.properties and 
-                comp_result.component.properties.get("runtime_analysis") == "true" and
-                comp_result.component.properties.get("environment")):
-                # Extract runtime version from environment (e.g., "python_3.11" -> "python-3.11")
-                env = comp_result.component.properties.get("environment", "")
-                if env:
-                    component_type = env.replace("_", "-")
             
             component_data = {
                 "name": comp_result.component.name,

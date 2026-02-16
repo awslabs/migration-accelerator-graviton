@@ -940,7 +940,7 @@ Summary:
 
 Issues Found: 20 components require attention
 
-[Detailed component list if --detailed flag used]
+[Detailed component list if --verbose-output flag used]
 ```
 
 **Usage**: Generates console-friendly text reports for command-line usage.

@@ -4,7 +4,7 @@ This directory contains sample SBOM files, configuration files, and test data fo
 
 ## Sample SBOM Files
 
-### `sample_sbom.json`
+### `sample_cyclonedx_sbom.json`
 Comprehensive multi-runtime test SBOM:
 - **Format**: CycloneDX specification
 - **Components**: 33 components across all supported runtimes
@@ -12,7 +12,7 @@ Comprehensive multi-runtime test SBOM:
 - **Includes**: Linux packages, ISV software, open source libraries
 - **Use case**: Complete end-to-end testing of all runtime analyzers
 
-### `sample_cyclonedx.json`
+### `sample_cyclonedx_sbom.json`
 Basic CycloneDX format SBOM:
 - **Format**: CycloneDX specification
 - **Use case**: Testing CycloneDX parser functionality
@@ -64,10 +64,10 @@ Sample JAR file:
 ### Basic SBOM Analysis
 ```bash
 # Analyze comprehensive test SBOM (all runtimes)
-python graviton_validator.py examples/sample_sbom.json
+python graviton_validator.py examples/sample_cyclonedx_sbom.json
 
 # Analyze CycloneDX SBOM
-python graviton_validator.py examples/sample_cyclonedx.json
+python graviton_validator.py examples/sample_cyclonedx_sbom.json
 
 # Analyze SPDX SBOM
 python graviton_validator.py examples/sample_spdx_sbom.json
@@ -79,16 +79,16 @@ python graviton_validator.py -k examples/sample_knowledge_base.json examples/sam
 ### Runtime Analysis
 ```bash
 # With runtime testing (comprehensive test)
-python graviton_validator.py --runtime --test --containers examples/sample_sbom.json
+python graviton_validator.py --yes examples/sample_cyclonedx_sbom.json
 
 # With custom runtime config
-python graviton_validator.py --runtime --test --runtime-config examples/runtime_config.yaml examples/sample_spdx_sbom.json
+python graviton_validator.py --test-local --runtime-config examples/runtime_config.yaml examples/sample_spdx_sbom.json
 ```
 
 ### Direct Manifest Analysis
 ```bash
 # Analyze Maven POM
-python graviton_validator.py --runtime-only java --input-file examples/test-pom.xml
+python graviton_validator.py --test-manifests java --input-file examples/test-pom.xml
 
 # Analyze JAR file
 python graviton_validator.py --jars examples/JARs/
@@ -97,10 +97,10 @@ python graviton_validator.py --jars examples/JARs/
 ### Output Formats
 ```bash
 # JSON output
-python graviton_validator.py -f json -o report.json examples/sample_sbom.json
+python graviton_validator.py -f json -o report.json examples/sample_cyclonedx_sbom.json
 
 # Excel output
-python graviton_validator.py -f excel -o report.xlsx examples/sample_sbom.json
+python graviton_validator.py -f excel -o report.xlsx examples/sample_cyclonedx_sbom.json
 
 # Markdown output
 python graviton_validator.py -f markdown -o report.md examples/sample_spdx_sbom.json
@@ -111,7 +111,7 @@ python graviton_validator.py -f markdown -o report.md examples/sample_spdx_sbom.
 ### Parser Validation
 ```bash
 # Test all SBOM formats
-python graviton_validator.py examples/sample_cyclonedx.json
+python graviton_validator.py examples/sample_cyclonedx_sbom.json
 python graviton_validator.py examples/sample_spdx.json
 python graviton_validator.py examples/sample_spdx_sbom.json
 ```
@@ -119,7 +119,7 @@ python graviton_validator.py examples/sample_spdx_sbom.json
 ### Multi-Runtime Testing
 ```bash
 # Full analysis with all runtimes
-python graviton_validator.py --runtime --test --containers examples/sample_sbom.json
+python graviton_validator.py --yes examples/sample_cyclonedx_sbom.json
 
 # Batch processing
 python graviton_validator.py examples/sample_*.json
@@ -127,8 +127,8 @@ python graviton_validator.py examples/sample_*.json
 
 ## File Characteristics
 
-- **Comprehensive**: sample_sbom.json (all runtimes, 33 components)
-- **Small SBOMs**: Quick testing (sample_cyclonedx.json, sample_spdx.json)
+- **Comprehensive**: sample_cyclonedx_sbom.json (all runtimes, 33 components)
+- **Small SBOMs**: Quick testing (sample_cyclonedx_sbom.json, sample_spdx.json)
 - **Large SBOMs**: Realistic scenarios (sample_app_identifier_cyclonedx_sbom.json)
 - **Configuration**: Runtime and knowledge base examples
 - **Test data**: Direct manifest and JAR analysis samples

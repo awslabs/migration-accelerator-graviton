@@ -98,7 +98,7 @@ SBOM_NAME=$(basename "{s3_key}" .json)
 echo "=== Downloading SBOM: $SBOM_NAME ==="
 aws s3 cp "s3://{S3_BUCKET}/{s3_key}" ./sbom.json || {{ echo "ERROR: Failed to download SBOM"; exit 1; }}
 echo "=== Running analysis ==="
-python3.11 graviton_validator.py sbom.json --runtime --test --containers -f excel -o "$SBOM_NAME.xlsx" --output-dir ./results/ || {{ echo "ERROR: Analysis failed"; exit 1; }}
+python3.11 graviton_validator.py sbom.json --yes -f excel -o "$SBOM_NAME.xlsx" --output-dir ./results/ || {{ echo "ERROR: Analysis failed"; exit 1; }}
 echo "=== Uploading results to S3 ==="
 aws s3 sync ./results/ "s3://{S3_BUCKET}/output/individual/$SBOM_NAME/" || {{ echo "ERROR: Failed to upload results"; exit 1; }}
 echo "=== Job completed successfully ==="
@@ -166,7 +166,7 @@ grep '\\.json$' batch-manifest.txt | grep -v '^#' | while read sbom_file; do
 done
 
 echo "=== Running analysis ==="
-python3.11 graviton_validator.py -d ./sboms --runtime --test --containers -f excel -o "$PROJECT_NAME-report.xlsx" --output-dir ./results/
+python3.11 graviton_validator.py -d ./sboms --yes -f excel -o "$PROJECT_NAME-report.xlsx" --output-dir ./results/
 
 echo "=== Uploading results to S3 ==="
 aws s3 sync ./results/ "s3://{S3_BUCKET}/$S3_OUTPUT_PREFIX/"

@@ -579,7 +579,7 @@ class RuntimeAnalyzerManager:
         return applicable
     
     def generate_manifests_only(self, components: List[Any], output_dir: str, sbom_data: Optional[Dict[str, Any]] = None, **kwargs) -> Dict[str, Any]:
-        """Generate runtime manifests without performing actual analysis (for --sbom-only mode)."""
+        """Generate runtime manifests without performing actual analysis (for --extract-manifests mode)."""
         logger.info(f"Generating runtime manifests for {len(components)} components")
         
         results = {}
@@ -702,6 +702,64 @@ class RuntimeAnalyzerManager:
                     logger.warning(f"No {runtime_type} dependencies found, skipping analyzer")
                     continue
                 
+                # Check runtime cache - separate cached from untested dependencies
+                cached_results = []
+                untested_dependencies = []
+                analysis_cache = kwargs.get('analysis_cache')
+                os_version_for_cache = self.config.get_os_version(
+                    sbom_name, detected_versions.get('os_version')
+                )
+                
+                if analysis_cache:
+                    for dep in dependencies:
+                        # Handle different dep formats: Python/Node use 'name', Java uses 'artifactId'
+                        dep_name = dep.get('name') or dep.get('artifactId', '')
+                        dep_version = dep.get('version', '')
+                        cached = analysis_cache.get_runtime(
+                            dep_name, dep_version, runtime_type, os_version_for_cache or ''
+                        )
+                        if cached:
+                            cached_results.append(cached)
+                        else:
+                            untested_dependencies.append(dep)
+                    
+                    if cached_results:
+                        logger.info(f"Runtime cache: {len(cached_results)} cached, {len(untested_dependencies)} to test for {runtime_type}")
+                else:
+                    untested_dependencies = dependencies
+                
+                # If all dependencies are cached, skip container run entirely
+                if not untested_dependencies:
+                    logger.info(f"All {len(dependencies)} {runtime_type} dependencies found in cache, skipping container run")
+                    analysis_result = {
+                        'components': cached_results,
+                        'summary': {
+                            'total_components': len(cached_results),
+                            'compatible': sum(1 for c in cached_results if c.get('compatibility', {}).get('status') == 'compatible'),
+                            'incompatible': sum(1 for c in cached_results if c.get('compatibility', {}).get('status') != 'compatible'),
+                        }
+                    }
+                    # Save and continue to next runtime
+                    runtime_dir = Path(output_dir) / runtime_type
+                    runtime_dir.mkdir(exist_ok=True)
+                    result_filename = f"{sbom_name}_{runtime_type}_analysis.json" if sbom_name else f"{runtime_type}_analysis.json"
+                    result_path = runtime_dir / result_filename
+                    with open(result_path, 'w') as f:
+                        json.dump(analysis_result, f, indent=2)
+                    
+                    results[runtime_type] = {
+                        'analyzer': runtime_type,
+                        'dependencies_count': len(dependencies),
+                        'manifest_path': '',
+                        'result_path': str(result_path),
+                        'analysis_result': analysis_result,
+                        'from_cache': True
+                    }
+                    continue
+                
+                # Use untested dependencies for manifest generation
+                deps_for_manifest = untested_dependencies
+                
                 # Log sample dependencies for debugging
                 sample_deps = dependencies[:3]
                 logger.debug(f"Sample {runtime_type} dependencies: {sample_deps}")
@@ -723,7 +781,7 @@ class RuntimeAnalyzerManager:
                 
                 # Generate manifest file with SBOM name prefix
                 logger.debug(f"Generating {runtime_type} manifest file in {runtime_dir}")
-                manifest_path = analyzer.generate_manifest_file(dependencies, str(runtime_dir), sbom_name)
+                manifest_path = analyzer.generate_manifest_file(deps_for_manifest, str(runtime_dir), sbom_name)
                 logger.info(f"Generated {runtime_type} manifest: {manifest_path}")
                 
                 # Check prerequisites for runtime (skip for container execution)
@@ -776,6 +834,27 @@ class RuntimeAnalyzerManager:
                                 logger.debug(f"{runtime_type} execution output (first 200 chars): {exec_result['output'][:200]}...")
                 
                 # Save enriched analysis result to disk (overwrites raw data with enriched data)
+                # Cache new results and merge with cached results
+                if analysis_cache and 'components' in analysis_result:
+                    for comp in analysis_result['components']:
+                        analysis_cache.put_runtime(
+                            comp.get('name', ''), comp.get('version', ''),
+                            runtime_type, os_version or '',
+                            comp
+                        )
+                
+                # Merge cached results back into analysis result
+                if cached_results and 'components' in analysis_result:
+                    analysis_result['components'].extend(cached_results)
+                    # Update summary
+                    all_comps = analysis_result['components']
+                    analysis_result['summary'] = {
+                        'total_components': len(all_comps),
+                        'compatible': sum(1 for c in all_comps if c.get('compatibility', {}).get('status') == 'compatible'),
+                        'incompatible': sum(1 for c in all_comps if c.get('compatibility', {}).get('status') != 'compatible'),
+                    }
+                    logger.info(f"{runtime_type} merged {len(cached_results)} cached + {len(all_comps) - len(cached_results)} new results")
+                
                 result_filename = f"{sbom_name}_{runtime_type}_analysis.json" if sbom_name else f"{runtime_type}_analysis.json"
                 result_path = runtime_dir / result_filename
                 

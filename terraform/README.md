@@ -89,7 +89,7 @@ aws s3 cp my-app.sbom.json s3://$BUCKET/input/individual/
 1. EventBridge detects upload
 2. Lambda submits Batch job
 3. Batch launches EC2 instance
-4. Analysis runs with `--runtime --test --containers`
+4. Analysis runs with container testing (--yes for non-interactive mode)
 5. Results uploaded to `output/individual/my-app/`
 6. EC2 terminates automatically
 

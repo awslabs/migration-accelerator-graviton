@@ -538,10 +538,12 @@ class NodeJSPackageInstaller:
         current_version_supported = True
         
         notes = f"Successfully installed {package_name}@{version}"
+        if native_build == 'Yes':
+            notes += '. Needs manual verification: native addon detected, confirm ARM64 compatibility'
         if test_result['success']:
-            notes += ' Tests passed.'
+            notes += '. Tests passed.'
         else:
-            notes += ' Tests failed.' if test_result['has_tests'] else ' (No test script available)'
+            notes += '. Tests failed.' if test_result['has_tests'] else ' (No test script available)'
         
         logger.debug(f"Creating success result for {package_name}@{version}: status={status.value}, native_build={native_build}")
         

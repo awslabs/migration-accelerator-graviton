@@ -44,7 +44,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
             if (not parsed_args.sbom_files and not parsed_args.sbom_directory and 
                 not parsed_args.merge_report_files and not parsed_args.merge_runtime_directory and
                 not parsed_args.sbom_only and not parsed_args.runtime_only):
-                self.error("No input specified. Use SBOM files, --directory, --merge, --sbom-only, or --runtime-only")
+                self.error("No input specified. Use SBOM files, --directory, --merge-reports, --extract-manifests, or --test-manifests")
             return parsed_args
     
     parser = CustomArgumentParser(
@@ -52,33 +52,25 @@ def create_argument_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 QUICK START:
-  %(prog)s sbom.json                    # Analyze single SBOM file
-  %(prog)s -d ./sboms                   # Analyze all SBOMs in directory
+  %(prog)s sbom.json                    # Full analysis (container testing if Docker available)
+  %(prog)s sbom.json --static-only      # Fast static analysis only (no installation testing)
   %(prog)s sbom.json -f excel           # Generate Excel report
 
-COMMON OPTIONS:
-  %(prog)s sbom.json --runtime          # Test actual package installation
-  %(prog)s sbom.json -k custom_kb.json  # Use custom knowledge base
-  %(prog)s *.json -o my_report.xlsx     # Multiple files to Excel
+CI/CD PIPELINE:
+  %(prog)s sbom.json --yes -f excel -o report.xlsx  # Non-interactive mode
 
-ADVANCED FEATURES:
-  %(prog)s sbom.json --runtime --test --containers  # Safe runtime testing
+COMMON OPTIONS:
+  %(prog)s sbom.json --test-local       # Test packages on local system
+  %(prog)s sbom.json -k custom_kb.json  # Use custom knowledge base
   %(prog)s -d ./sboms --jars ./libs/*.jar           # Include JAR analysis
-  %(prog)s --merge report1.json report2.json       # Combine reports
 
 MULTI-STAGE BUILDS:
-  %(prog)s --sbom-only -d ./sboms       # Stage 1: Generate manifests
-  %(prog)s --runtime-only auto          # Stage 2: Test dependencies
-  %(prog)s --merge-runtime ./results/   # Stage 3: Combine results
-
-RUNTIME-ONLY ANALYSIS:
-  %(prog)s --runtime-only nodejs --test --containers --input-file package.json
-  %(prog)s --runtime-only java --test --containers --input-file pom.xml
-  %(prog)s --runtime-only python --test --containers --input-file requirements.txt
+  %(prog)s --extract-manifests -d ./sboms  # Stage 1: Extract manifests
+  %(prog)s --test-manifests auto           # Stage 2: Test dependencies
+  %(prog)s --merge-results ./results/      # Stage 3: Combine results
 
 MERGE REPORTS:
-  %(prog)s --merge report1.json report2.json -f excel -o combined.xlsx
-  %(prog)s --merge ~/results/*_analysis.json -f markdown
+  %(prog)s --merge-reports report1.json report2.json -f excel -o combined.xlsx
 
 For detailed documentation, see README.md
         """
@@ -100,29 +92,31 @@ For detailed documentation, see README.md
     # === ADVANCED MODES ===
     advanced_group = parser.add_argument_group('Advanced Execution Modes')
     advanced_group.add_argument(
-        '--merge',
+        '--merge-reports',
         dest='merge_report_files',
         nargs='*',
-        help='Merge existing JSON reports into single report'
+        help='Merge existing JSON analysis reports into single report'
     )
     advanced_group.add_argument(
-        '--merge-runtime',
+        '--merge-results',
         dest='merge_runtime_directory',
         nargs='?',
         const='output_files',
-        help='Merge SBOM and runtime results from directory (default: output_files)'
+        help='Merge SBOM and runtime test results from directory (default: output_files)'
     )
     advanced_group.add_argument(
-        '--sbom-only',
+        '--extract-manifests',
+        dest='sbom_only',
         action='store_true',
-        help='Generate manifests only (for multi-stage builds)'
+        help='Extract package manifests from SBOM (for multi-stage builds)'
     )
     advanced_group.add_argument(
-        '--runtime-only',
+        '--test-manifests',
+        dest='runtime_only',
         nargs='?',
         const='auto',
         choices=['nodejs', 'python', 'java', 'dotnet', 'ruby', 'auto'],
-        help='Analyze runtime dependencies only (requires --input-dir)'
+        help='Test extracted package manifests (requires --input-dir)'
     )
     advanced_group.add_argument(
         '--input-file',
@@ -131,7 +125,7 @@ For detailed documentation, see README.md
     advanced_group.add_argument(
         '--input-dir',
         default='output_files',
-        help='Directory with manifests from --sbom-only (default: output_files)'
+        help='Directory with manifests from --extract-manifests (default: output_files)'
     )
     
     # === CONFIGURATION ===
@@ -154,33 +148,28 @@ For detailed documentation, see README.md
         help='Configuration file for advanced settings'
     )
     
-    # === ANALYSIS FEATURES ===
-    analysis_group = parser.add_argument_group('Analysis Features (optional enhancements)')
+    # === ANALYSIS MODE ===
+    analysis_group = parser.add_argument_group('Analysis Mode')
     analysis_group.add_argument(
-        '--runtime',
-        dest='runtime_analysis',
+        '--static-only',
         action='store_true',
-        help='Test actual package installation (Python, Node.js, Java, .NET, Ruby)'
+        help='Skip package installation testing. Only use knowledge base analysis (fast).'
     )
     analysis_group.add_argument(
-        '--test',
-        dest='runtime_test',
+        '--test-local',
         action='store_true',
-        help='Actually install packages during runtime analysis (slower but accurate)'
+        help='Test packages on local system instead of in containers. Use for development. Not recommended for production.'
     )
-    analysis_group.add_argument(
-        '--containers',
-        dest='use_containers',
-        action='store_true',
-        help='Use Docker for isolated runtime testing (recommended for --test)'
-    )
-    analysis_group.add_argument(
+    
+    # === ADDITIONAL ANALYSIS ===
+    additional_group = parser.add_argument_group('Additional Analysis')
+    additional_group.add_argument(
         '--jars',
         dest='jar_files',
         nargs='*',
         help='Additional JAR/WAR/EAR files to analyze'
     )
-    analysis_group.add_argument(
+    additional_group.add_argument(
         '--jar-dir',
         dest='jar_directory',
         help='Directory with JAR/WAR/EAR files'
@@ -216,9 +205,10 @@ For detailed documentation, see README.md
         help='Directory for all output files (default: output_files)'
     )
     output_group.add_argument(
-        '--detailed',
+        '--verbose-output',
+        dest='detailed',
         action='store_true',
-        help='Include detailed component info in text reports'
+        help='Include detailed component information in text reports'
     )
     
     # === EXPERT OPTIONS ===
@@ -234,21 +224,23 @@ For detailed documentation, see README.md
         action='store_true',
         help='Keep temporary files for debugging'
     )
+    expert_group.add_argument(
+        '--container-timeout',
+        type=int,
+        default=180,
+        help='Timeout in seconds for container-based package testing (default: 180)'
+    )
     
     # === LOGGING ===
     logging_group = parser.add_argument_group('Logging & Debugging')
     logging_group.add_argument(
         '-v', '--verbose',
-        action='store_true',
-        help='Show detailed progress information and enable runtime-specific debug logs'
+        action='count',
+        default=0,
+        help='Increase verbosity. Use -v for INFO, -vv for DEBUG'
     )
     logging_group.add_argument(
-        '--debug',
-        action='store_true',
-        help='Show debug information (internal logic only, just sets logging level to DEBUG)'
-    )
-    logging_group.add_argument(
-        '--quiet',
+        '-q', '--quiet',
         action='store_true',
         help='Show only errors'
     )
@@ -261,6 +253,28 @@ For detailed documentation, see README.md
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
         default='INFO',
         help='Set logging level (default: INFO)'
+    )
+    
+    # === OS KNOWLEDGE BASE AUTO-UPDATE ===
+    kb_update_group = parser.add_argument_group('OS Knowledge Base Auto-Update')
+    kb_update_group.add_argument(
+        '--disable-os-kb-update',
+        action='store_true',
+        help='Disable automatic OS knowledge base updates'
+    )
+    kb_update_group.add_argument(
+        '--os-kb-max-age-days',
+        type=int,
+        default=7,
+        help='Maximum age in days before OS KB is updated (default: 7)'
+    )
+    
+    # === SYSTEM ===
+    system_group = parser.add_argument_group('System Options')
+    system_group.add_argument(
+        '-y', '--yes',
+        action='store_true',
+        help='Non-interactive mode. Bypass all prompts and use defaults.'
     )
     
     # === UTILITY ===
@@ -293,8 +307,8 @@ def _detect_sbom_format(sbom_data: dict) -> str:
         return "Syft"
     
     # Check for SPDX format by looking for SPDX-specific top-level keys
-    spdx_indicators = ["spdxversion", "relationships", "packages"]
-    if all(key in sbom_data for key in spdx_indicators):
+    sbom_keys_lower = [k.lower() for k in sbom_data.keys()]
+    if "spdxversion" in sbom_keys_lower or "spdxid" in sbom_keys_lower:
         return "SPDX"
     
     # Throw error if format cannot be determined
@@ -380,6 +394,105 @@ def _detect_sbom_source(sbom_data: dict, sbom_format: str) -> str:
     return "third_party"
 
 
+def _check_docker_availability():
+    """Check if Docker or Podman is available."""
+    import shutil
+    return shutil.which('docker') is not None or shutil.which('podman') is not None
+
+
+def _determine_analysis_mode(args, logger):
+    """
+    Determine the analysis mode based on flags and Docker availability.
+    Returns: 'static', 'test-container', or 'test-local'
+    """
+    # Explicit modes
+    if args.static_only:
+        logger.info("Running static analysis only (--static-only)")
+        return 'static'
+    
+    if args.test_local:
+        logger.warning("Testing packages on local system (--test-local)")
+        logger.warning("This will install packages on your system. Use --static-only for safe analysis.")
+        return 'test-local'
+    
+    # Default mode: test in container if available
+    docker_available = _check_docker_availability()
+    
+    if docker_available:
+        logger.info("Docker/Podman detected. Running comprehensive analysis with container testing.")
+        return 'test-container'
+    
+    # Docker not available - prompt user
+    logger.warning("=" * 70)
+    logger.warning("Docker/Podman not detected")
+    logger.warning("=" * 70)
+    logger.warning("")
+    logger.warning("Installation testing requires Docker or Podman for safe isolated testing.")
+    logger.warning("")
+    logger.warning("Options:")
+    logger.warning("  1. Install Docker/Podman and run again for comprehensive testing")
+    logger.warning("  2. Continue with static analysis only (faster, less comprehensive)")
+    logger.warning("  3. Test on local system with --test-local (not recommended)")
+    logger.warning("")
+    
+    # Non-interactive mode
+    if args.yes:
+        logger.warning("Non-interactive mode (--yes): Continuing with static analysis only.")
+        return 'static'
+    
+    # Interactive prompt
+    try:
+        response = input("Continue with static analysis only? [y/N]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()  # New line after Ctrl+C
+        logger.info("Interrupted by user.")
+        sys.exit(0)
+    
+    if response in ['y', 'yes']:
+        logger.info("Continuing with static analysis only.")
+        return 'static'
+    else:
+        logger.info("Exiting. Install Docker/Podman for comprehensive testing.")
+        logger.info("  - Docker: https://docs.docker.com/get-docker/")
+        logger.info("  - Podman: https://podman.io/getting-started/installation")
+        sys.exit(0)
+
+
+def _check_cpu_architecture(args, logger):
+    """Warn if running installation tests on non-ARM64 machine."""
+    import platform
+    arch = platform.machine().lower()
+    is_arm64 = arch in ('aarch64', 'arm64')
+    
+    if is_arm64:
+        return
+    
+    logger.warning("=" * 70)
+    logger.warning(f"Non-ARM64 architecture detected: {arch}")
+    logger.warning("=" * 70)
+    logger.warning("")
+    logger.warning("Installation test results on this machine may be inaccurate.")
+    logger.warning("Some packages with native C/C++ extensions may install successfully")
+    logger.warning("on x86 but fail on ARM64/Graviton (or vice versa).")
+    logger.warning("")
+    logger.warning("For accurate results, run on an ARM64/Graviton instance.")
+    logger.warning("")
+    
+    if args.yes:
+        logger.warning("Non-interactive mode (--yes): Continuing with potentially inaccurate results.")
+        return
+    
+    try:
+        response = input("Continue with installation testing on non-ARM64? [y/N]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        sys.exit(0)
+    
+    if response not in ['y', 'yes']:
+        logger.info("Exiting. Run on an ARM64/Graviton instance for accurate results.")
+        sys.exit(0)
+
+
 def _validate_files_exist(files, error_msg):
     """Helper to validate file existence."""
     if files:
@@ -408,11 +521,11 @@ def validate_arguments(args: argparse.Namespace) -> None:
     if has_sbom_input and not args.sbom_only:
         active_modes.append('SBOM analysis')
     elif args.sbom_only and not has_sbom_input:
-        print("Error: --sbom-only requires SBOM files or --directory", file=sys.stderr)
+        print("Error: --extract-manifests requires SBOM files or --directory", file=sys.stderr)
         sys.exit(1)
     
     if len(active_modes) == 0 and not (has_sbom_input or args.sbom_only):
-        print("Error: No input specified. Use: SBOM files, --directory, --merge, --sbom-only, or --runtime-only", file=sys.stderr)
+        print("Error: No input specified. Use: SBOM files, --directory, --merge-reports, --extract-manifests, or --test-manifests", file=sys.stderr)
         sys.exit(1)
     elif len(active_modes) > 1:
         print(f"Error: Cannot use multiple input modes: {', '.join(active_modes)}", file=sys.stderr)
@@ -420,7 +533,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
     
     # Validate paths and files
     if args.runtime_only and not Path(args.input_dir).exists():
-        print(f"Error: Input directory not found: {args.input_dir}\nHint: Run --sbom-only first to generate manifests", file=sys.stderr)
+        print(f"Error: Input directory not found: {args.input_dir}\nHint: Run --extract-manifests first to generate manifests", file=sys.stderr)
         sys.exit(1)
     
     _validate_files_exist(args.sbom_files, "SBOM files not found")
@@ -428,32 +541,36 @@ def validate_arguments(args: argparse.Namespace) -> None:
     _validate_files_exist(args.knowledge_base_files, "Knowledge base files not found")
     _validate_files_exist(args.merge_report_files, "Report files not found")
     
-    # Validate flag compatibility with execution modes
-    if args.sbom_only:
-        if args.runtime_analysis:
-            print("Warning: --runtime ignored in --sbom-only mode (only generates manifests)", file=sys.stderr)
-        if args.runtime_test:
-            print("Warning: --test ignored in --sbom-only mode (no package testing)", file=sys.stderr)
-        if args.use_containers:
-            print("Warning: --containers ignored in --sbom-only mode", file=sys.stderr)
+    # Validate analysis mode flags
+    if args.static_only and args.test_local:
+        print("Error: Cannot use both --static-only and --test-local", file=sys.stderr)
+        sys.exit(1)
     
+    if args.sbom_only and (args.static_only or args.test_local):
+        print("Warning: Analysis mode flags ignored in --extract-manifests mode (only generates manifests)", file=sys.stderr)
+
+
+def _map_new_flags_to_legacy_attributes(args, analysis_mode):
+    """Map new analysis mode flags to legacy internal attributes for backward compatibility."""
+    # Set legacy attributes based on analysis mode
+    if analysis_mode == 'static':
+        args.runtime_analysis = False
+        args.runtime_test = False
+        args.use_containers = False
+    elif analysis_mode == 'test-local':
+        args.runtime_analysis = True
+        args.runtime_test = True
+        args.use_containers = False
+    elif analysis_mode == 'test-container':
+        args.runtime_analysis = True
+        args.runtime_test = True
+        args.use_containers = True
+    
+    # runtime-only mode always enables runtime testing
     if args.runtime_only:
-        if args.runtime_analysis:
-            print("Warning: --runtime is implicit in --runtime-only mode", file=sys.stderr)
-        # --test and --containers are still relevant for runtime-only mode
-    
-    # Auto-enable dependent options for regular mode
-    if not args.sbom_only and not args.runtime_only:
-        if args.runtime_test and not args.runtime_analysis:
-            print("Warning: --test requires --runtime, enabling runtime analysis", file=sys.stderr)
-            args.runtime_analysis = True
-        if args.use_containers and not args.runtime_analysis:
-            print("Warning: --containers requires --runtime, enabling runtime analysis", file=sys.stderr)
-            args.runtime_analysis = True
-    
-    # Warn when runtime is enabled but test is not (for all modes that support runtime)
-    if (args.runtime_analysis or args.runtime_only) and not args.runtime_test:
-        print("Warning: Runtime analysis without --test only analyzes manifests (use --test for actual package installation testing)", file=sys.stderr)
+        args.runtime_analysis = True
+        args.runtime_test = True
+        # use_containers depends on analysis mode
 
 
 def perform_sbom_only_analysis(args, config, logger) -> int:
@@ -887,7 +1004,73 @@ def merge_runtime_results(directory_path: str):
     return _create_merged_result(sbom_result, merged_components)
 
 
-
+def _check_and_update_os_kb(args, logger):
+    """
+    Check and update OS knowledge bases if needed.
+    Simple wrapper that calls the os_kb_updater script.
+    """
+    try:
+        # Get SBOM files to analyze
+        sbom_files = []
+        if args.sbom_files:
+            sbom_files.extend(args.sbom_files)
+        if args.sbom_directory:
+            sbom_dir = Path(args.sbom_directory)
+            if sbom_dir.exists():
+                sbom_files.extend(sbom_dir.glob('*.json'))
+        
+        if not sbom_files:
+            logger.debug("No SBOM files provided, skipping OS KB auto-update check")
+            return  # No SBOM files to analyze
+        
+        # Use first SBOM file for OS detection
+        sbom_file = Path(sbom_files[0])
+        logger.debug(f"Checking OS KB freshness for SBOM: {sbom_file.name}")
+        
+        # Import and run updater
+        import subprocess
+        scripts_dir = Path(__file__).parent / "scripts"
+        updater_script = scripts_dir / "os_kb_updater.py"
+        
+        if not updater_script.exists():
+            logger.debug("OS KB updater script not found, skipping auto-update")
+            return
+        
+        logger.info("Checking OS knowledge base freshness...")
+        
+        # Run updater with SBOM file
+        max_age = getattr(args, 'os_kb_max_age_days', 7)
+        logger.debug(f"OS KB max age threshold: {max_age} days")
+        
+        result = subprocess.run(
+            [sys.executable, str(updater_script), '--sbom', str(sbom_file), '--max-age-days', str(max_age)],
+            capture_output=True,
+            text=True,
+            timeout=600  # 10 minute timeout
+        )
+        
+        if result.returncode == 0:
+            if result.stdout:
+                # Parse output for better logging
+                output = result.stdout.strip()
+                if "No OS detected" in output:
+                    logger.debug("No OS detected in SBOM, skipping KB updates")
+                elif "up-to-date" in output:
+                    logger.info("✅ All required OS knowledge bases are up-to-date")
+                elif "Successfully updated" in output:
+                    logger.info(f"✅ {output}")
+                else:
+                    logger.info(output)
+        else:
+            logger.warning(f"OS KB update check completed with warnings")
+            if result.stderr:
+                logger.debug(f"Update details: {result.stderr.strip()}")
+    
+    except subprocess.TimeoutExpired:
+        logger.warning("OS KB update check timed out, continuing with existing knowledge bases")
+    except Exception as e:
+        logger.debug(f"OS KB auto-update skipped: {e}")
+        # Don't fail the entire analysis if update check fails
 
 
 def main() -> int:
@@ -913,13 +1096,14 @@ def main() -> int:
         config = load_config(config_path)
         
         # Override config with command-line arguments
-        if args.verbose:
+        if args.quiet:
+            config.logging.level = 'ERROR'
+        elif args.verbose >= 2:  # -vv or more
             config.logging.verbose = True
             config.logging.level = 'DEBUG'
-        elif hasattr(args, 'quiet') and args.quiet:
-            config.logging.level = 'ERROR'
-        elif args.debug:
-            config.logging.level = 'DEBUG'
+        elif args.verbose == 1:  # -v
+            config.logging.verbose = True
+            config.logging.level = 'INFO'
         else:
             config.logging.level = args.log_level
         
@@ -934,6 +1118,17 @@ def main() -> int:
         )
         
         logger.info("Starting Graviton Compatibility Validator")
+        
+        # Determine analysis mode (for non-special modes)
+        if not (args.sbom_only or args.runtime_only or args.merge_report_files or args.merge_runtime_directory):
+            analysis_mode = _determine_analysis_mode(args, logger)
+            _map_new_flags_to_legacy_attributes(args, analysis_mode)
+            # Warn if running installation tests on non-ARM64
+            if analysis_mode in ('test-container', 'test-local'):
+                _check_cpu_architecture(args, logger)
+        else:
+            # For special modes, set defaults
+            _map_new_flags_to_legacy_attributes(args, 'static')
         
         # Handle independent execution modes
         if args.sbom_only:
@@ -960,6 +1155,10 @@ def main() -> int:
         # Initialize components
         parser_factory = SBOMParserFactory()
         kb_loader = KnowledgeBaseLoader()
+        
+        # Auto-update OS knowledge bases if enabled
+        if not args.disable_os_kb_update:
+            _check_and_update_os_kb(args, logger)
         
         # Load knowledge base
         logger.info("Loading knowledge base...")
@@ -1020,6 +1219,10 @@ def main() -> int:
         
         # Create analyzer with matching configuration
         analyzer = create_analyzer(knowledge_base=knowledge_base, matching_config=config.matching, deny_list_loader=deny_list_loader)
+        
+        # Create shared analysis cache for cross-SBOM deduplication
+        from graviton_validator.analysis.analysis_cache import AnalysisCache
+        analysis_cache = AnalysisCache()
         
         # Collect JAR files for enhancement if specified
         jar_files = []
@@ -1238,7 +1441,7 @@ def main() -> int:
                                     logger.warning(f"Failed to load OS-specific KB: {e}")
                 
                     # Create analyzer after all knowledge bases are loaded and merged
-                    analyzer = create_analyzer(knowledge_base=knowledge_base, matching_config=config.matching, deny_list_loader=deny_list_loader)
+                    analyzer = create_analyzer(knowledge_base=knowledge_base, matching_config=config.matching, deny_list_loader=deny_list_loader, analysis_cache=analysis_cache)
                     
                     # Apply format and source specific filtering (already done in processing functions)
                     logger.info(f"Ready to analyze {len(components)} components")
@@ -1336,7 +1539,9 @@ def main() -> int:
                             'deep_scan': True,
                             'runtime_test': args.runtime_test,
                             'verbose': config.logging.verbose,
-                            'sbom_name': Path(sbom_file).stem
+                            'sbom_name': Path(sbom_file).stem,
+                            'analysis_cache': analysis_cache,
+                            'container_timeout': args.container_timeout
                         }
                         
                         # Only pass skip_cleanup if explicitly set by user
@@ -1463,6 +1668,7 @@ def main() -> int:
             return 1
         
         logger.info("Analysis complete")
+        analysis_cache.log_stats()
         return 0
         
     except GravitonValidatorError as e:

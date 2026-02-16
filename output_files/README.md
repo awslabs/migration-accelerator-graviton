@@ -20,19 +20,19 @@ Default output directory for analysis results. Files are created here when no ex
 
 ### Multi-Stage Analysis
 
-**Stage 1** (`--sbom-only`):
+**Stage 1** (`--extract-manifests`):
 ```
 <sbom-name>_sbom_analysis.json     # Initial SBOM analysis
 <sbom-name>_runtime_config.json    # Detected runtimes
 <sbom-name>_<runtime>_manifest.*   # Runtime manifests
 ```
 
-**Stage 2** (`--runtime-only <runtime>`):
+**Stage 2** (`--test-manifests <runtime>`):
 ```
 <runtime>_runtime_analysis.json    # Runtime-specific results
 ```
 
-**Stage 3** (`--merge-runtime`):
+**Stage 3** (`--merge-results`):
 ```
 <sbom-name>_final_report.json      # Merged results
 <sbom-name>_final_report.xlsx      # Excel format (if -f excel)

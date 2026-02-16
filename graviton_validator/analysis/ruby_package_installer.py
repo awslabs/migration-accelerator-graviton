@@ -656,16 +656,16 @@ class RubyCompatibilityAnalyzer:
             arch_check = self._check_native_architecture(gem_name)
             known_issues = self._check_known_problematic_gems(gem_name)
             
-            validation_details = []
+            reasons = []
             if require_test == 'needs_verification':
-                validation_details.append("Runtime loading: needs_verification")
+                reasons.append("runtime 'require' test could not confirm loading")
             if arch_check == 'needs_verification':
-                validation_details.append("Architecture check: needs_verification")
+                reasons.append("native extension architecture could not be verified")
             if known_issues == 'needs_verification':
-                validation_details.append("Known issues: detected")
+                reasons.append("gem has known ARM64 compatibility concerns")
             
-            if validation_details:
-                return f"{base_notes} (Needs verification: {', '.join(validation_details)})"
+            if reasons:
+                return f"{base_notes}. Needs manual verification: {'; '.join(reasons)}"
         
         return base_notes
     
