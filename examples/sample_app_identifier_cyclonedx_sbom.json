@@ -9138,6 +9138,69 @@
           "value": "docker-25.0.8-1.amzn2023.0.5.aarch64"
         }
       ]
+    },
+    {
+      "type": "container",
+      "bom-ref": "container:web-frontend",
+      "name": "web-frontend",
+      "version": "nginx:1.25-alpine",
+      "description": "Container image: nginx:1.25-alpine",
+      "properties": [
+        {
+          "name": "container:image",
+          "value": "nginx:1.25-alpine"
+        },
+        {
+          "name": "container:base-image",
+          "value": "alpine:3.18"
+        },
+        {
+          "name": "package:type",
+          "value": "container-image"
+        }
+      ]
+    },
+    {
+      "type": "container",
+      "bom-ref": "container:app-server",
+      "name": "app-server",
+      "version": "node:22-bookworm-slim",
+      "description": "Container image: node:22-bookworm-slim",
+      "properties": [
+        {
+          "name": "container:image",
+          "value": "node:22-bookworm-slim"
+        },
+        {
+          "name": "container:base-image",
+          "value": "debian:bookworm-slim"
+        },
+        {
+          "name": "package:type",
+          "value": "container-image"
+        }
+      ]
+    },
+    {
+      "type": "container",
+      "bom-ref": "container:cache",
+      "name": "cache",
+      "version": "redis:7.2-alpine",
+      "description": "Container image: redis:7.2-alpine",
+      "properties": [
+        {
+          "name": "container:image",
+          "value": "redis:7.2-alpine"
+        },
+        {
+          "name": "container:base-image",
+          "value": "alpine:3.19"
+        },
+        {
+          "name": "package:type",
+          "value": "container-image"
+        }
+      ]
     }
   ],
   "properties": [

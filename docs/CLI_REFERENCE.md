@@ -107,8 +107,10 @@ python graviton_validator.py sbom.json --static-only
 
 **What it does**:
 - Analyzes SBOM against knowledge base only
-- No package installation or registry checks
-- Fast and safe (no network access needed)
+- Enriches unknown OS/system packages via ARM Ecosystem Dashboard (requires Docker/Podman for MCP server; skipped if unavailable)
+- Checks container image ARM64 support via Docker Registry API
+- No package installation or registry checks for language dependencies
+- Fast and safe
 
 #### `--test-local`
 **Type**: Flag  

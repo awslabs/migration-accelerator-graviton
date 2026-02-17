@@ -129,6 +129,7 @@ python graviton_validator.py sbom1.json sbom2.json
 python graviton_validator.py -d ./sbom-files/
 
 # Fast static analysis only (no installation testing)
+# Also enriches unknown packages via ARM Ecosystem Dashboard and checks container image ARM64 support
 python graviton_validator.py examples/sample_cyclonedx_sbom.json --static-only
 ```
 

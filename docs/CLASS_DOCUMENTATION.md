@@ -799,6 +799,43 @@ class ComponentCategory(Enum):
 
 ---
 
+### ArmMcpClient
+**Location**: `graviton_validator/analysis/arm_mcp_client.py`
+**Purpose**: MCP client for communicating with the ARM MCP server via JSON-RPC over stdio.
+
+**Key Methods**:
+- `connect() -> bool` - Start ARM MCP container and initialize session. Returns False if no Docker/Podman available.
+- `knowledge_base_search(query: str) -> List[Dict]` - Search ARM knowledge base for package compatibility info.
+- `close()` - Shut down the MCP server container.
+
+**Usage**: Used by `arm_ecosystem_enrichment.py` to query the Arm Ecosystem Dashboard for unknown components.
+
+### enrich_with_arm_ecosystem (Function)
+**Location**: `graviton_validator/analysis/arm_ecosystem_enrichment.py`
+**Purpose**: Enrich Unknown/Needs Verification components with Arm Ecosystem Dashboard data.
+
+**Behavior**:
+- Collects unique OS/system-level components with Unknown or Needs Verification status
+- Skips language-level packages (pip, npm, maven, gem, nuget) and container components
+- Queries ARM MCP `knowledge_base_search` per unique component
+- Parses snippets for compatibility status, minimum version, recommended version
+- Updates component status and notes in place
+- Gracefully skips if no container runtime (Docker/Podman) is available
+
+### check_container_components (Function)
+**Location**: `graviton_validator/analysis/container_arch_checker.py`
+**Purpose**: Check ARM64 architecture support for container images found in SBOMs.
+
+**Behavior**:
+- Finds components with type `container` or `container-image`
+- Checks both `container:image` and `container:base-image` properties
+- Queries Docker Registry HTTP API v2 for manifest lists
+- Supports Docker Hub, ECR, and any OCI-compliant registry
+- Caches results per image within a run
+- Updates component notes with ARM64 availability
+
+---
+
 ## Reporting Classes
 
 ### ReportGenerator (ABC)

@@ -654,6 +654,14 @@ def perform_sbom_only_analysis(args, config, logger) -> int:
         # Analyze compatibility
         analysis_result = analyzer.analyze_components(components, detected_os, sbom_file)
         
+        # Enrich unknown/needs-verification components with ARM Ecosystem Dashboard data
+        from graviton_validator.analysis.arm_ecosystem_enrichment import enrich_with_arm_ecosystem
+        analysis_result = enrich_with_arm_ecosystem(analysis_result)
+        
+        # Check container image ARM64 support
+        from graviton_validator.analysis.container_arch_checker import check_container_components
+        check_container_components(analysis_result.components)
+        
         # Save SBOM analysis results
         sbom_filename = Path(sbom_file).stem
         sbom_json_path = output_dir / f"{sbom_filename}_sbom_analysis.json"
@@ -1527,6 +1535,14 @@ def main() -> int:
                         except Exception as e:
                             logger.error(f"JAR enhancement failed: {e}")
                             # Continue with original SBOM analysis
+                    
+                    # Enrich unknown/needs-verification components with ARM Ecosystem Dashboard data
+                    from graviton_validator.analysis.arm_ecosystem_enrichment import enrich_with_arm_ecosystem
+                    analysis_result = enrich_with_arm_ecosystem(analysis_result)
+                    
+                    # Check container image ARM64 support
+                    from graviton_validator.analysis.container_arch_checker import check_container_components
+                    check_container_components(analysis_result.components)
                     
                     # Enhanced runtime analysis integration
                     if runtime_analyzer_manager:

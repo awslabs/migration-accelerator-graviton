@@ -50,8 +50,10 @@ This solution is designed for:
 ### 🔍 **Analysis Process**
 1. **Upload** your SBOM file or dependency manifest
 2. **Automatic Analysis** checks each component for Graviton compatibility
-3. **Runtime Testing** (optional) actually tests package installation on ARM64
-4. **Get Results** in Excel, JSON, or Markdown format
+3. **ARM Ecosystem Enrichment** queries the Arm Ecosystem Dashboard (via MCP) for unknown OS/system packages
+4. **Container Image Check** verifies ARM64 support for container images found in SBOMs
+5. **Runtime Testing** (optional) actually tests package installation on ARM64
+6. **Get Results** in Excel, JSON, or Markdown format
 
 ### 📊 **Compatibility Results**
 | Status | Meaning | What to do |

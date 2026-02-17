@@ -35,7 +35,7 @@ Multi-stage SBOM compatibility analyzer for AWS Graviton (ARM64) migration asses
 
 The diagram above shows the internal architecture with three main layers:
 1. **Input Layer**: SBOM parsing and component extraction
-2. **Analysis Layer**: Knowledge base matching and runtime testing
+2. **Analysis Layer**: Knowledge base matching, runtime testing, ARM ecosystem enrichment (via MCP), and container image ARM64 validation
 3. **Reporting Layer**: Multi-format report generation
 
 ### Core Modules
@@ -49,6 +49,9 @@ The diagram above shows the internal architecture with three main layers:
 - `knowledge_base/` - KB loading and matching (SBOM analysis)
 - `knowledge_base/runtime_loader.py` - Runtime KB fast-path (10-15 common packages per runtime)
 - `filtering/` - System package detection
+- `analysis/arm_ecosystem_enrichment.py` - ARM Ecosystem Dashboard lookup via MCP for unknown OS/system packages
+- `analysis/arm_mcp_client.py` - MCP client for ARM MCP server communication (JSON-RPC over stdio)
+- `analysis/container_arch_checker.py` - Container image ARM64 architecture check via Docker Registry API
 
 **Runtime Testing**:
 - `analysis/python_runtime_analyzer.py` - Python: Runtime KB → PyPI API → Cache
@@ -75,6 +78,8 @@ python graviton_validator.py sbom.json
 - Matches components against knowledge base
 - Checks deny lists
 - **Tests package installation in containers** (if Docker/Podman available)
+- **Enriches unknown OS/system packages** via ARM Ecosystem Dashboard (MCP)
+- **Checks container image ARM64 support** via Docker Registry API
 - If Docker not available: prompts user to continue with static analysis or exit
 
 **Requires**: Docker or Podman (recommended)
@@ -92,12 +97,14 @@ python graviton_validator.py sbom.json --static-only
 - Parses SBOM file
 - Matches components against knowledge base
 - Checks deny lists
+- Enriches unknown OS/system packages via ARM Ecosystem Dashboard (MCP, requires Docker/Podman)
+- Checks container image ARM64 support via Docker Registry API
 - Generates compatibility report
 
 **Does NOT**:
 - Install any packages
-- Check package registries
-- Require network access or Docker
+- Check package registries for language dependencies
+- Require Docker for core analysis (ARM MCP enrichment skipped gracefully if unavailable)
 
 **Use case**: Quick compatibility check, offline environments
 
