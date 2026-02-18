@@ -34,7 +34,8 @@ class GravitonCompatibilityAnalyzer(CompatibilityAnalyzer):
                  os_config_manager: Optional[OSConfigManager] = None,
                  component_filter: Optional[ComponentFilter] = None,
                  deny_list_loader: Optional[DenyListLoader] = None,
-                 runtime_analyzers: Optional[Dict] = None):
+                 runtime_analyzers: Optional[Dict] = None,
+                 analysis_cache=None):
         """
         Initialize the compatibility analyzer with OS-aware capabilities.
         
@@ -45,10 +46,12 @@ class GravitonCompatibilityAnalyzer(CompatibilityAnalyzer):
             os_detector: Optional OSDetector for OS identification
             os_config_manager: Optional OSConfigManager for OS compatibility data
             component_filter: Optional ComponentFilter for OS-aware filtering
+            analysis_cache: Optional AnalysisCache for cross-SBOM result caching
         """
         self.knowledge_base = knowledge_base
         self.recommendation_generator = recommendation_generator or DefaultRecommendationGenerator(knowledge_base)
         self.matching_config = matching_config
+        self.analysis_cache = analysis_cache
         
         # OS-aware components
         self.os_config_manager = os_config_manager or OSConfigManager()
@@ -221,15 +224,50 @@ class GravitonCompatibilityAnalyzer(CompatibilityAnalyzer):
     def check_single_component(self, component: SoftwareComponent, detected_os: Optional[str] = None, component_category: ComponentCategory = ComponentCategory.APPLICATION) -> ComponentResult:
         """
         Check compatibility for a single software component with OS awareness.
-        
-        Args:
-            component: SoftwareComponent to analyze
-            detected_os: Optional detected OS name
-            component_category: Component category for OS-aware handling
-            
-        Returns:
-            ComponentResult containing the analysis for this component
         """
+        # Check cache first
+        if self.analysis_cache:
+            cached = self.analysis_cache.get(
+                component.name, component.version or "", component.component_type, detected_os or ""
+            )
+            if cached:
+                return ComponentResult(
+                    component=component,
+                    compatibility=CompatibilityResult(
+                        status=CompatibilityStatus(cached["status"]),
+                        current_version_supported=cached.get("current_version_supported", False),
+                        minimum_supported_version=cached.get("minimum_supported_version"),
+                        recommended_version=cached.get("recommended_version"),
+                        notes=cached.get("notes", ""),
+                        confidence_level=cached.get("confidence_level", 0.0)
+                    ),
+                    matched_name=cached.get("matched_name")
+                )
+        
+        result = self._do_check_single_component(component, detected_os, component_category)
+        
+        # Store in cache
+        if self.analysis_cache:
+            status = result.compatibility.status
+            status_str = status.value if hasattr(status, 'value') else str(status)
+            self.analysis_cache.put(
+                component.name, component.version or "", component.component_type,
+                {
+                    "status": status_str,
+                    "current_version_supported": result.compatibility.current_version_supported,
+                    "minimum_supported_version": result.compatibility.minimum_supported_version,
+                    "recommended_version": result.compatibility.recommended_version,
+                    "notes": result.compatibility.notes,
+                    "confidence_level": result.compatibility.confidence_level,
+                    "matched_name": result.matched_name
+                },
+                detected_os or ""
+            )
+        
+        return result
+    
+    def _do_check_single_component(self, component: SoftwareComponent, detected_os: Optional[str] = None, component_category: ComponentCategory = ComponentCategory.APPLICATION) -> ComponentResult:
+        """Internal implementation of single component check."""
         # Check deny list first
         if self.deny_list_loader and self.deny_list_loader.is_denied(component.name):
             deny_entry = self.deny_list_loader.get_deny_entry(component.name)
@@ -789,7 +827,8 @@ class DefaultRecommendationGenerator(RecommendationGenerator):
 def create_analyzer(knowledge_base: KnowledgeBase, 
                    recommendation_generator: Optional[RecommendationGenerator] = None,
                    matching_config=None,
-                   deny_list_loader: Optional[DenyListLoader] = None) -> CompatibilityAnalyzer:
+                   deny_list_loader: Optional[DenyListLoader] = None,
+                   analysis_cache=None) -> CompatibilityAnalyzer:
     """
     Factory function to create a compatibility analyzer with OS-aware capabilities.
     
@@ -797,6 +836,7 @@ def create_analyzer(knowledge_base: KnowledgeBase,
         knowledge_base: KnowledgeBase instance
         recommendation_generator: Optional custom RecommendationGenerator
         matching_config: Optional matching configuration for intelligent matching
+        analysis_cache: Optional AnalysisCache for cross-SBOM result caching
         
     Returns:
         CompatibilityAnalyzer instance with OS detection capabilities
@@ -813,5 +853,6 @@ def create_analyzer(knowledge_base: KnowledgeBase,
         os_detector=os_detector,
         os_config_manager=os_config_manager,
         component_filter=component_filter,
-        deny_list_loader=deny_list_loader
+        deny_list_loader=deny_list_loader,
+        analysis_cache=analysis_cache
     )

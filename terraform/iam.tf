@@ -111,6 +111,11 @@ resource "aws_iam_role_policy_attachment" "batch_ec2" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
 }
 
+resource "aws_iam_role_policy_attachment" "batch_ec2_ssm" {
+  role       = aws_iam_role.batch_ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # S3 access for EC2 instance (needed because privileged containers can't access task role)
 resource "aws_iam_role_policy" "batch_ec2_s3" {
   name = "graviton-validator-batch-ec2-s3-policy"
@@ -205,11 +210,9 @@ resource "aws_iam_role_policy" "lambda" {
           "batch:ListJobs",
           "batch:DescribeJobs"
         ]
-        # Scoped to specific job queue and jobs instead of wildcard
-        Resource = [
-          aws_batch_job_queue.main.arn,
-          "arn:aws:batch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:job/*"
-        ]
+        # These actions do not support resource-level permissions per AWS documentation
+        # See: https://docs.aws.amazon.com/IAM/latest/UserGuide/list_awsbatch.html
+        Resource = "*"
       },
       {
         Effect = "Allow"

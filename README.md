@@ -50,8 +50,10 @@ This solution is designed for:
 ### 🔍 **Analysis Process**
 1. **Upload** your SBOM file or dependency manifest
 2. **Automatic Analysis** checks each component for Graviton compatibility
-3. **Runtime Testing** (optional) actually tests package installation on ARM64
-4. **Get Results** in Excel, JSON, or Markdown format
+3. **ARM Ecosystem Enrichment** queries the Arm Ecosystem Dashboard (via MCP) for unknown OS/system packages
+4. **Container Image Check** verifies ARM64 support for container images found in SBOMs
+5. **Runtime Testing** (optional) actually tests package installation on ARM64
+6. **Get Results** in Excel, JSON, or Markdown format
 
 ### 📊 **Compatibility Results**
 | Status | Meaning | What to do |
@@ -92,7 +94,7 @@ For detailed architecture information, see [Architecture Documentation](docs/ARC
 - AWS CLI version 2.0 or later configured with appropriate credentials
 - Python 3.8+ (for local analysis)
 - Terraform v1.0+ (for infrastructure deployment)
-- Docker (for local analysis with `--containers` flag)
+- Docker (recommended for container-based package testing, which is the default behavior)
 
 ### Option 0: Generate SBOM Files (If Needed)
 
@@ -123,18 +125,26 @@ This generates CycloneDX SBOM files that you can then analyze with the compatibi
 #### Step 1: Deploy Infrastructure
 
 ```bash
-# Deploy everything with one command
+# Deploy everything with one command (recommended)
 ./deploy.sh
 
 # The deploy script automatically:
+# - Creates/manages Terraform state bucket
 # - Deploys Terraform infrastructure
 # - Enables S3 EventBridge notifications
 # - Verifies deployment
 # - Shows usage instructions
 
-# Or manual deployment
+# Use existing state bucket
+./deploy.sh deploy --state-bucket my-existing-bucket
+
+# Or manual deployment (requires state bucket)
 cd terraform
-terraform init && terraform apply
+# You must provide a state bucket for remote state storage
+terraform init \
+  -backend-config="bucket=my-terraform-state-bucket" \
+  -backend-config="region=us-east-1"
+terraform apply
 
 # Enable S3 EventBridge notifications (required for triggering)
 BUCKET=$(terraform output -raw s3_bucket_name)
@@ -203,26 +213,33 @@ pip install -r requirements.txt
 #### Step 2: Run Analysis
 
 ```bash
-# Basic analysis (knowledge base only)
-python graviton_validator.py examples/sample_sbom.json
+# Default: comprehensive analysis (tests in container if Docker available)
+python graviton_validator.py examples/sample_cyclonedx_sbom.json
 
-# With runtime testing (recommended - requires Docker)
-python graviton_validator.py my-app-sbom.json --runtime --test --containers
+# Fast static analysis only (no installation testing)
+python graviton_validator.py my-app-sbom.json --static-only
 
-# Generate Excel report
-python graviton_validator.py my-app-sbom.json --runtime --test --containers -f excel -o report.xlsx
+# Non-interactive mode for CI/CD
+python graviton_validator.py my-app-sbom.json --yes -f excel -o report.xlsx
 
 # Batch analysis
-python graviton_validator.py -d ./sbom-files/ --runtime --test --containers -f excel
+python graviton_validator.py -d ./sbom-files/ --yes -f excel
 ```
 
-**Note:** The `--containers` flag requires Docker to be installed and running.
+**Note:** Docker is recommended. By default, the tool tests packages in containers for safety. Use `--static-only` to skip installation testing.
 
 **⚠️ Important:** For most accurate runtime testing results, run the tool on an ARM64/Graviton instance. The AWS Batch infrastructure automatically uses Graviton3 instances for testing.
 
 For detailed usage instructions, see [Quick Start Guide](docs/QUICK_START.md) and [CLI Reference](docs/CLI_REFERENCE.md).
 
 ## Advanced Features
+
+### 🔄 Auto-Updating Knowledge Bases
+- Automatically updates OS package databases when stale (default: 7 days)
+- Only updates OS versions present in your SBOM
+- Detects and generates KBs for new OS versions automatically
+- Parallel updates for multiple OS versions
+- Can be disabled with `--disable-os-kb-update` flag
 
 ### 🧪 Runtime Testing
 - Actually installs packages to verify ARM64 compatibility
@@ -254,36 +271,36 @@ python graviton_validator.py -d ./all-sboms/ -f excel -o portfolio-analysis.xlsx
 ### 🔄 CI/CD Integration
 ```bash
 # Quick compatibility check in pipeline
-python graviton_validator.py app-sbom.json --runtime --test --containers
+python graviton_validator.py app-sbom.json --yes
 ```
 
 ### 📋 Detailed Assessment
 ```bash
 # Comprehensive analysis with all features
-python graviton_validator.py app-sbom.json --runtime --test --containers --jars ./libs/ -f excel
+python graviton_validator.py app-sbom.json --yes --jars ./libs/ -f excel
 ```
 
 ### 🚀 Multi-Stage Processing
 ```bash
 # Stage 1: Generate manifests
-python graviton_validator.py --sbom-only -d ./sboms
+python graviton_validator.py --extract-manifests -d ./sboms
 
 # Stage 2: Runtime analysis (can run in parallel)
-python graviton_validator.py --runtime-only nodejs --test --containers
-python graviton_validator.py --runtime-only python --test --containers
+python graviton_validator.py --test-manifests nodejs --yes
+python graviton_validator.py --test-manifests python --yes
 
 # Stage 3: Merge results
-python graviton_validator.py --merge-runtime ./output_files/ -f excel
+python graviton_validator.py --merge-results ./output_files/ -f excel
 ```
 
 ### 📁 Direct Manifest Analysis
 ```bash
 # Analyze specific manifest files directly
-python graviton_validator.py --runtime-only nodejs --test --containers --input-file package.json
-python graviton_validator.py --runtime-only python --test --containers --input-file requirements.txt
+python graviton_validator.py --test-manifests nodejs --yes --input-file package.json
+python graviton_validator.py --test-manifests python --yes --input-file requirements.txt
 
 # Merge multiple analysis results
-python graviton_validator.py --merge ./results/*_analysis.json -f excel -o combined_report.xlsx
+python graviton_validator.py --merge-reports ./results/*_analysis.json -f excel -o combined_report.xlsx
 ```
 
 ## Documentation
@@ -292,6 +309,7 @@ python graviton_validator.py --merge ./results/*_analysis.json -f excel -o combi
 - **[Quick Start Guide](docs/QUICK_START.md)** - Get started in 5 minutes
 - **[CLI Reference](docs/CLI_REFERENCE.md)** - Complete command-line reference
 - **[JAR Enhancement Guide](docs/JAR_ENHANCEMENT_GUIDE.md)** - Java JAR/WAR/EAR analysis
+- **[OS KB Auto-Update](docs/OS_KB_AUTO_UPDATE.md)** - Automatic knowledge base updates
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
 
 ### 🔧 Technical Documentation
@@ -341,7 +359,7 @@ Graviton Compatibility Analysis Report
 
 - **IAM roles**: Service-specific roles with least privilege permissions
 - **Resource policies**: S3 bucket policies restrict access to authorized services
-- **Job isolation**: Each Batch job runs in isolated container environment (when using `--containers` flag for runtime testing)
+- **Job isolation**: Each Batch job runs in isolated container environment (container testing is the default behavior)
 
 ## Troubleshooting
 
@@ -354,8 +372,8 @@ Graviton Compatibility Analysis Report
 
 **Local analysis fails**:
 - Install missing dependencies: `pip install -r requirements.txt`
-- For `--containers` mode, ensure Docker is running
-- Enable debug logging: `--debug -v --log-file analysis.log`
+- For container testing (default), ensure Docker is running
+- Enable debug logging: `-vv --log-file analysis.log`
 
 For detailed troubleshooting, see [Troubleshooting Guide](docs/TROUBLESHOOTING.md).
 

@@ -179,7 +179,7 @@ def analyze_package_versions(package_name: str, versions: List[str]) -> List[Com
                 # Determine status based on native build detection
                 if working_native_build == 'needs_verification':
                     status = CompatibilityStatus.NEEDS_VERIFICATION
-                    notes = f'Successfully installed {package_name}=={version} (x86-only native files detected - requires ARM64 verification)'
+                    notes = f'Successfully installed {package_name}=={version}. Needs manual verification: native .so files detected but could not confirm ARM64 compatibility'
                 elif working_native_build == 'Yes':
                     status = CompatibilityStatus.COMPATIBLE
                     notes = f'Successfully installed {package_name}=={version} (ARM64 native compilation successful)'
@@ -258,7 +258,7 @@ def analyze_package_versions(package_name: str, versions: List[str]) -> List[Com
                     latest_status = CompatibilityStatus.NEEDS_VERIFICATION if native_build == 'needs_verification' else CompatibilityStatus.COMPATIBLE
                     latest_notes = f'Latest version {installed_version} works'
                     if native_build == 'needs_verification':
-                        latest_notes += ' (x86-only native files detected)'
+                        latest_notes += '. Needs manual verification: native .so files detected but could not confirm ARM64 compatibility'
                     elif native_build == 'Yes':
                         latest_notes += ' (ARM64 native compilation successful)'
                     
@@ -330,7 +330,7 @@ def analyze_package_versions(package_name: str, versions: List[str]) -> List[Com
                 latest_status = CompatibilityStatus.NEEDS_VERIFICATION if native_build == 'needs_verification' else CompatibilityStatus.COMPATIBLE
                 latest_notes = f'Latest version {installed_version} works'
                 if native_build == 'needs_verification':
-                    latest_notes += ' (x86-only native files detected)'
+                    latest_notes += '. Needs manual verification: native .so files detected but could not confirm ARM64 compatibility'
                 elif native_build == 'Yes':
                     latest_notes += ' (ARM64 native compilation successful)'
                 
@@ -394,7 +394,7 @@ def analyze_package_versions(package_name: str, versions: List[str]) -> List[Com
                 status = CompatibilityStatus.NEEDS_VERIFICATION if native_build == 'needs_verification' else CompatibilityStatus.COMPATIBLE
                 notes = f'Latest version {installed_version} works'
                 if native_build == 'needs_verification':
-                    notes += ' (x86-only native files detected)'
+                    notes += '. Needs manual verification: native .so files detected but could not confirm ARM64 compatibility'
                 elif native_build == 'Yes':
                     notes += ' (ARM64 native compilation successful)'
                 

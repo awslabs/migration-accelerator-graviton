@@ -51,6 +51,20 @@
         dest: "{{ local_output_dir }}/"
         flat: yes
         
+    - name: Find container SBOMs
+      find:
+        paths: /tmp/graviton-discovery
+        patterns: "sbom_container_*.json"
+      register: container_sboms
+
+    - name: Download container SBOMs to control machine
+      fetch:
+        src: "{{ item.path }}"
+        dest: "{{ local_output_dir }}/"
+        flat: yes
+      loop: "{{ container_sboms.files }}"
+      when: container_sboms.matched > 0
+
     - name: Cleanup working directory
       file:
         path: /tmp/graviton-discovery

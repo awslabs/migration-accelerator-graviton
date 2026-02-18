@@ -1,0 +1,682 @@
+{
+  "0b180079b244e5b14f4723fcb0eb86391d2d810f3e0bd49cb5ef05a7dc6c7ff4": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "2.8",
+      "recommended_version": "3.1.6",
+      "notes": "ARM64 support available in version 2.8 and later. Current version 2.7.2 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:30:37.390547Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "72cedbff4f1970a57846f1f0cf658b26dd3b196700313d02f266683a3a76c700": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "1.1.1",
+      "recommended_version": "3.0.3",
+      "notes": "ARM64 support available in version 1.1.1 and later. Current version 0.11 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:30:37.426961Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "4299cae16b38b3d4b3aede13cb7ceed9befa3bd0d82bb9d64093d58097248c56": {
+    "data": {
+      "status": "unknown",
+      "current_version_supported": false,
+      "notes": "Source distribution only - requires compilation. Native module detection: source-only package. Test compilation on ARM64 environment. ARM64 analysis: has_arm64_wheels=False, has_universal_wheels=False, has_wheels=False, source_only=True, wheel_types=[]"
+    },
+    "timestamp": "2026-02-10T12:30:37.714820Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "cf6e0f7063fed0262e44c9ae67715504c3072af6b21d5f0f4bc158e0375cb26b": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "2.0.0",
+      "recommended_version": "2.0.0b1",
+      "notes": "ARM64 support available in version 2.0.0 and later. Current version 1.6.0 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:30:37.770399Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "3ded832c6a3ca1955f329af88db612de9069416a50ddb4fe32a25bd40375b7d4": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "5.0.7",
+      "recommended_version": "5.0.9",
+      "notes": "ARM64 support available in version 5.0.7 and later. Current version 4.7.2 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:30:38.062567Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "6fb1d8b4027f635fe924d46264f1aadcd6cc100275608440c47607eb33026e8f": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:38.086235Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "dba14843edc17d1272f6ee61bd279567591c145ccd79443ce97482df0c7a0661": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "1.1.10",
+      "recommended_version": "1.1.9",
+      "notes": "ARM64 support available in version 1.1.10 and later. Current version 1.0.4 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:30:38.107525Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "4d57cccd2eba1dbd795cb2bbf626f6594d43e273499d49046f6704c51edb7552": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "0.5",
+      "recommended_version": "0.5",
+      "notes": "ARM64 support available in version 0.5 and later. Current version 0.4 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:30:38.126632Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "e03f4658a25ed52190db0adbca906080e1b79238842c817eac607f17797fa84f": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:38.145187Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "5717dd49201712a0059b02a10d0d83e3a18374528bfb5ba72f04584b9033215d": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "1.20",
+      "recommended_version": "1.9",
+      "notes": "ARM64 support available in version 1.20 and later. Current version 1.2 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:30:38.161698Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "30f876a339e6df55a61f4c56147ad55c9e32365cc9078ec4abedf78fe29da6a1": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:38.179296Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "724aa6e4a3847108fb287845d0996b1968eb1d9e53198d4837c77231b52b7887": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:38.198757Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "4827348d59da7598e66a2e9e7d7c33a0520100a141b168990b5057e59e1ef64d": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:38.486296Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "7da2a341c7a67ef0e1d7804d1ddcb8bfa1e6baf555cdee58ce860603ec39a505": {
+    "data": {
+      "status": "unknown",
+      "current_version_supported": false,
+      "notes": "Source distribution only - requires compilation. Native module detection: source-only package. Test compilation on ARM64 environment. ARM64 analysis: has_arm64_wheels=False, has_universal_wheels=False, has_wheels=False, source_only=True, wheel_types=[]"
+    },
+    "timestamp": "2026-02-10T12:30:38.770812Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "95bfe06a0f7b72baf1957207cdbe35a23363add6f6ed9a649435958294cffc79": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:38.809652Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "a3e20ce2df3921b3456bebe60a30bfdf89a5d8dbea2e3df7b9f44b6c63d8829a": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "2.0.7",
+      "recommended_version": "3.3.1",
+      "notes": "ARM64 support available in version 2.0.7 and later. Current version 2.0.1 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:30:38.831155Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "d85c8f8b4f046fd16b0516ab9e568dd1cc6d366c647697623b4182556700ec77": {
+    "data": {
+      "status": "unknown",
+      "current_version_supported": false,
+      "notes": "Source distribution only - requires compilation. Native module detection: source-only package. Test compilation on ARM64 environment. ARM64 analysis: has_arm64_wheels=False, has_universal_wheels=False, has_wheels=False, source_only=True, wheel_types=[]"
+    },
+    "timestamp": "2026-02-10T12:30:38.853020Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "4bcf4afe3a4b71a597855c37ce27e44034bfd5cf893f03b10e3930b195fcbebc": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:38.871929Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "89f0a1de0f3091b784c671b4ade325e3d2ace4f55d7159a0e236c426c17e8276": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:38.892787Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "b197ef86be2d7d0e6c31c67ab80048eb01505efdc22b62f8da1bfb9436bb6fe5": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "7.45.3",
+      "recommended_version": "7.45.7",
+      "notes": "ARM64 support available in version 7.45.3 and later. Current version 7.19.0 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:30:38.914518Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "deabaa54b98da82964e282493d8e7bf59597191acee05eb8b7b50a958431dbea": {
+    "data": {
+      "status": "unknown",
+      "current_version_supported": false,
+      "notes": "Source distribution only - requires compilation. Native module detection: source-only package. Test compilation on ARM64 environment. ARM64 analysis: has_arm64_wheels=False, has_universal_wheels=False, has_wheels=False, source_only=True, wheel_types=[]"
+    },
+    "timestamp": "2026-02-10T12:30:39.188698Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "63cab95cb5eb18fbcebf783eb9046b54dd4551ab5f73a13757e423798199d18d": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "0.6.2.dev28",
+      "recommended_version": "0.6.8",
+      "notes": "ARM64 support available in version 0.6.2.dev28 and later. Current version 0.5.4 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:30:39.470650Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "90a53a458093e95357db49a09fbfb68c6ce1d0682ddf1b751add389396591992": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:39.744027Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "dbfe04ac76efd9ad57364b9d1f01d2f6318161baffeb2edf09d50b33c1bf2f14": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "0.7",
+      "recommended_version": "0.7",
+      "notes": "ARM64 support available in version 0.7 and later. Current version 0.4 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:30:39.759195Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "584989719514a3289845793fb76bfef2b8cb06233df0ce45b9a4e7dc05ab117a": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:39.776163Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "30888a65ac4064549576712d8c78c8f8f09672378cdba4c855224c92514f4898": {
+    "data": {
+      "status": "unknown",
+      "current_version_supported": false,
+      "notes": "Package metadata not available from PyPI"
+    },
+    "timestamp": "2026-02-10T12:30:40.115873Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "e55dca19bca34598019a2b59315c9bc04dbd2a0f89314c01f68a024e228c9cbb": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:40.343561Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "1112bef9599ee0e9b56fe84081c13a5349fcec1fa091c5afee940d7ec0f5a882": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:40.368701Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "c426540a78b7374dfc3aebe8edec88b23b83803e76c66012aff683c1cdc5a8ae": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "3.20.1",
+      "recommended_version": "3.9.0",
+      "notes": "ARM64 support available in version 3.20.1 and later. Current version 3.2.0 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:30:40.395749Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "18db3b006ace7c31955a016bb912e67dea24dd48655774e3b814de03f4a26c64": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:40.410592Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "c27540344c960d87ada3ef249eab10c4cecbfc9f57e3cef9379cc5d433aeaccb": {
+    "data": {
+      "status": "unknown",
+      "current_version_supported": false,
+      "notes": "Unable to determine ARM64 compatibility from metadata. ARM64 analysis: has_arm64_wheels=False, has_universal_wheels=False, has_wheels=False, source_only=False, wheel_types=set()"
+    },
+    "timestamp": "2026-02-10T12:30:40.697884Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "a41e57125d23cb2778b4b36c939bbf498d90cdcdecb83ebb321ed72f1c83e54e": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:40.719029Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "a21044dcf05f89503e758793a396d01ac5fbe6bf5fbf525cedbbbb548ad23892": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:30:40.744907Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "e5eeff0a67d50704e554a4148bdb9c0e45914fccecd6edea03e066c9754310a8": {
+    "data": {
+      "status": "unknown",
+      "current_version_supported": false,
+      "notes": "Source distribution only - requires compilation. Native module detection: source-only package. Test compilation on ARM64 environment. ARM64 analysis: has_arm64_wheels=False, has_universal_wheels=False, has_wheels=False, source_only=True, wheel_types=[]"
+    },
+    "timestamp": "2026-02-10T12:30:41.016329Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "c3a94c69a22f9a64570ec87640c0da9537af38bfb7bdcef96e4e56b620af407f": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "2.1.1",
+      "recommended_version": "2.9.1",
+      "notes": "ARM64 support available in version 2.1.1 and later. Current version 0.9.6 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:32:14.438302Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "301ed1ce9aa0562bda28e6b12a3ed90e52f868f07499110b5656c8eb5df17587": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:32:14.455616Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "3f73da9aca1fefe447df9bc32315e6598f9265550a13adadbf5c99a863715359": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:32:14.469842Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "549b0608a727da50b58dd5e528c525e5c6db26e3e9ca7b8a4b3ff0ae09f69135": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-09T12:32:14.494518Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "0bbc4c38fe323b2e6abc83008d6ac7789b348ec5150930fe7e6f430c057e0216": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "2.20",
+      "recommended_version": "3.0",
+      "notes": "ARM64 support available in version 2.20 and later. Current version 2.14 requires upgrade."
+    },
+    "timestamp": "2026-02-09T12:32:14.509992Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "18b8c6720bb669ac9044bcc2e313091a1664ec45a15bf85beafdbdbf2f67d588": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:08:19.138947Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "51dfd2aab1fb7b946c1937a6fc3c6f3985cf93f12abbd6f25bf688eb47d21ba2": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:08:22.320042Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "2bd0f41b5733faaa350fea5351b8ead06e79d7499b1da9e18126f2f1446e85cf": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:08:22.462571Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "2d3529fa902820e5ef424efc4d8ca3be80cfae42de3da45e26f40331e6c74077": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "ARM64 wheels available: arm64"
+    },
+    "timestamp": "2026-02-16T13:08:27.477922Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "9b38696eb9c1b6b56376bdfd2083cb72d3d22e566d28e7211d2c23e19fb400ad": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:08:27.957032Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "87e7115017318fce7d199a1f2b7192cf657568495615fc55b4d125d7edbe9abc": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:08:28.938410Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "54aa29ab46c8dbd1b6a5574770ab43c03351fc2f80d59455c6e19c49d4dfee33": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:08:29.078851Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "650ec28b8b0098c302bffa952cd570403fea35e3fb12ae35ae9d5c38b982b390": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:08:29.214110Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "c49212bd2c0e9fe8d3f7ced3e7aed8f35f7cbac0c8c4761afb2417416b93bcf9": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:08:30.653250Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "363849f16603688711c241f2b62fa7a5e4b7fad5a6964a44ce653bd279201ecb": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:08:35.099313Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "b691f05b93ed3e8e0e799b5e95472403e2d3f18b7bc4d389ca9142ca9f708054": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:08:35.229554Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "de451d115e7652d07d7071bb1b7796c3067e6027d33ee593377d0883d96529d7": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:08:35.366747Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "f69b25c69c181688baeb02d29ef338d7c5f37f5138d484e58d7049b45aeb925c": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:09:10.089275Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "43a012f78997d267090171cabf1c76c2d0c938dcc25563fc9bce67ddcf3fabc1": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:09:10.218777Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "436c52f9b73c2f753a3055c98c6feae278c0e9269f73475616ac54c84e0f3fa4": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:09:10.347647Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "401fa44268b2968ce8f1026497a613bdc52eebf837b84a79d22f88260634d458": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "ARM64 wheels available: arm64, universal"
+    },
+    "timestamp": "2026-02-16T13:09:10.572414Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "373ab70384ad7952b019bb35fdbbda47947535017461c385f2e4567c7c9aa663": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "ARM64 wheels available: arm64, universal"
+    },
+    "timestamp": "2026-02-16T13:09:10.764674Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "98051acdfd999d3edc39110195c62e219ed3c405ac0cb67c48c01c965fa773e1": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:09:10.945491Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "d36826a069744e2ee281c7958b89244262f9a203abc98137e996a7fae24e8776": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:09:11.121962Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "0e41074673b859393d8010c699a070cc0f61f94892f8cbe10bacf10c34b04f32": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:09:11.284703Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "c865f17e9e6214a06bc016c85fc18229ba50d0ce9770e8cfe4aa991e16fdffac": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T13:09:11.449864Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "b4b6d7bc129a268472b32f14e79dc2e6ef8c26aca8ee1da1cd8ee5a4d2267fc4": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T15:11:47.139112Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "5205a8d2618ba62c241a76b0e82266a4c60d320ec06cb700a0038d7f5e983db5": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "Universal wheels available (compatible with ARM64)"
+    },
+    "timestamp": "2026-02-16T15:11:47.268187Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "b54cf8dd993768c6395ddba6f7f69dc4da0a5081afcf57f5a90d62af51658630": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "ARM64 wheels available: arm64"
+    },
+    "timestamp": "2026-02-16T15:11:47.407484Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "26d439896e8c23ef5bc710f17599fdfe9b4f94ad833a79aeba194b9314dc4166": {
+    "data": {
+      "status": "compatible",
+      "current_version_supported": true,
+      "notes": "ARM64 wheels available: arm64"
+    },
+    "timestamp": "2026-02-16T15:11:47.552736Z",
+    "version": "1.0",
+    "source": "api"
+  },
+  "116d773c8ac8784e785f927eaf164d45f14b729db3788ab9d5f7929e5f1455b1": {
+    "data": {
+      "status": "needs_upgrade",
+      "current_version_supported": false,
+      "minimum_supported_version": "1.37.0",
+      "recommended_version": "1.9.1",
+      "notes": "ARM64 support available in version 1.37.0 and later. Current version 1.30.0 requires upgrade."
+    },
+    "timestamp": "2026-02-16T15:11:47.909749Z",
+    "version": "1.0",
+    "source": "api"
+  }
+}

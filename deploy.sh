@@ -12,6 +12,66 @@ print_status() { echo -e "${GREEN}[INFO]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# Configuration
+AWS_REGION="${AWS_REGION:-us-east-1}"
+STATE_BUCKET_FILE="terraform/.terraform-state-bucket"
+
+create_state_bucket() {
+    local timestamp=$(date +"%d%m%y-%H%M%S")
+    local bucket_name="migration-accelerator-graviton-tfstate-${timestamp}"
+    
+    print_status "Creating Terraform state bucket: $bucket_name in region: $AWS_REGION"
+    
+    if [ "$AWS_REGION" = "us-east-1" ]; then
+        aws s3api create-bucket \
+            --bucket "$bucket_name" \
+            --region "$AWS_REGION"
+    else
+        aws s3api create-bucket \
+            --bucket "$bucket_name" \
+            --region "$AWS_REGION" \
+            --create-bucket-configuration LocationConstraint="$AWS_REGION"
+    fi
+    
+    # Enable versioning
+    aws s3api put-bucket-versioning \
+        --bucket "$bucket_name" \
+        --versioning-configuration Status=Enabled
+    
+    # Enable server-side encryption
+    aws s3api put-bucket-encryption \
+        --bucket "$bucket_name" \
+        --server-side-encryption-configuration '{
+            "Rules": [{
+                "ApplyServerSideEncryptionByDefault": {
+                    "SSEAlgorithm": "AES256"
+                }
+            }]
+        }'
+    
+    # Block public access
+    aws s3api put-public-access-block \
+        --bucket "$bucket_name" \
+        --public-access-block-configuration \
+            BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+    
+    echo "$bucket_name" > "$STATE_BUCKET_FILE"
+    echo "$bucket_name"
+}
+
+get_state_bucket() {
+    local provided_bucket="$1"
+    
+    if [ -n "$provided_bucket" ]; then
+        echo "$provided_bucket" > "$STATE_BUCKET_FILE"
+        echo "$provided_bucket"
+    elif [ -f "$STATE_BUCKET_FILE" ]; then
+        cat "$STATE_BUCKET_FILE"
+    else
+        create_state_bucket
+    fi
+}
+
 check_prerequisites() {
     print_status "Checking prerequisites..."
     
@@ -23,10 +83,17 @@ check_prerequisites() {
 }
 
 deploy_terraform() {
-    print_status "Deploying Terraform infrastructure..."
+    local state_bucket="$1"
+    
+    print_status "Deploying Terraform infrastructure with state bucket: $state_bucket"
     
     cd terraform
-    terraform init
+    
+    # Initialize with remote state
+    terraform init -reconfigure \
+        -backend-config="bucket=$state_bucket" \
+        -backend-config="region=$AWS_REGION"
+    
     terraform plan -out=tfplan
     terraform apply tfplan
     
@@ -35,215 +102,166 @@ deploy_terraform() {
     cd ..
 }
 
+enable_eventbridge() {
+    local bucket_name="$1"
+    
+    print_status "Enabling EventBridge notifications for S3 bucket: $bucket_name"
+    
+    aws s3api put-bucket-notification-configuration \
+        --bucket "$bucket_name" \
+        --notification-configuration '{"EventBridgeConfiguration": {}}'
+    
+    print_status "EventBridge notifications enabled!"
+}
+
 verify_deployment() {
+    local bucket_name="$1"
+    
     print_status "Verifying deployment..."
     
+    # Check EventBridge configuration
+    local eventbridge_config=$(aws s3api get-bucket-notification-configuration --bucket "$bucket_name" 2>/dev/null || echo "{}")
+    if echo "$eventbridge_config" | grep -q "EventBridgeConfiguration"; then
+        print_status "✓ EventBridge notifications configured"
+    else
+        print_warning "EventBridge notifications not configured"
+    fi
+    
+    # Check Batch resources
     cd terraform
-    BUCKET_NAME=$(terraform output -raw s3_bucket_name 2>/dev/null) || { 
-        print_error "Cannot get bucket name. Deploy infrastructure first."; 
-        cd ..; exit 1; 
-    }
+    local queue_name=$(terraform output -raw batch_job_queue_name 2>/dev/null || echo "")
+    if [ -n "$queue_name" ]; then
+        local queue_status=$(aws batch describe-job-queues --job-queues "$queue_name" --query 'jobQueues[0].state' --output text 2>/dev/null || echo "")
+        if [ "$queue_status" = "ENABLED" ]; then
+            print_status "✓ Batch job queue is enabled"
+        else
+            print_warning "Batch job queue status: $queue_status"
+        fi
+    fi
     cd ..
+}
+
+destroy_terraform() {
+    local delete_state="$1"
     
-    # Verify code upload
-    if aws s3 ls s3://$BUCKET_NAME/code/migration-accelerator-graviton.zip >/dev/null 2>&1; then
-        print_status "✓ Code uploaded to S3"
-    else
-        print_error "✗ Code not found in S3"
-        exit 1
+    print_status "Destroying Terraform infrastructure..."
+    
+    cd terraform
+    terraform destroy -auto-approve
+    
+    if [ "$delete_state" = "true" ] && [ -f "../$STATE_BUCKET_FILE" ]; then
+        local state_bucket=$(cat "../$STATE_BUCKET_FILE")
+        print_warning "Deleting state bucket: $state_bucket"
+        
+        # Empty bucket first
+        aws s3 rm "s3://$state_bucket" --recursive 2>/dev/null || true
+        
+        # Delete all versions
+        aws s3api list-object-versions --bucket "$state_bucket" --query 'Versions[].{Key:Key,VersionId:VersionId}' --output text 2>/dev/null | while read key version; do
+            [ -n "$key" ] && aws s3api delete-object --bucket "$state_bucket" --key "$key" --version-id "$version" 2>/dev/null || true
+        done
+        
+        # Delete bucket
+        aws s3api delete-bucket --bucket "$state_bucket" 2>/dev/null || true
+        rm -f "../$STATE_BUCKET_FILE"
+        
+        print_status "State bucket deleted"
     fi
     
-    # Verify EventBridge configuration (now managed by Terraform)
-    CONFIG=$(aws s3api get-bucket-notification-configuration --bucket "$BUCKET_NAME" 2>/dev/null)
-    if echo "$CONFIG" | grep -q "EventBridgeConfiguration" || [ -z "$CONFIG" ] || echo "$CONFIG" | grep -q "GetBucketNotificationConfiguration"; then
-        print_status "✓ EventBridge notifications enabled"
-    else
-        print_warning "✗ EventBridge notifications not enabled"
-    fi
+    cd ..
 }
 
 show_usage() {
-    echo "Usage: $0 [COMMAND]"
-    echo ""
-    echo "Commands:"
-    echo "  deploy              Deploy AWS Batch infrastructure (default)"
-    echo "  verify              Verify deployment configuration"
-    echo "  destroy             Destroy infrastructure"
-    echo "  status              Show deployment status"
-    echo "  test                Show usage instructions"
-    echo "  trigger             Manually trigger Lambda with test event"
-    echo "  monitor             Monitor Batch job logs"
-    echo ""
-    echo "Features: AWS Batch orchestration, auto-scaling, Spot instance support"
-}
+    cat << EOF
+Migration Accelerator for Graviton - Deployment Script
 
-show_test_instructions() {
-    cd terraform 2>/dev/null || { print_error "Run deployment first"; exit 1; }
-    BUCKET_NAME=$(terraform output -raw s3_bucket_name 2>/dev/null) || { 
-        print_error "Cannot get bucket name. Deploy infrastructure first."; 
-        exit 1; 
-    }
-    QUEUE_NAME=$(terraform output -raw batch_job_queue_name 2>/dev/null) || "graviton-validator-queue"
-    DASHBOARD_URL=$(terraform output -raw dashboard_url 2>/dev/null) || "N/A"
-    cd ..
-    
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "🚀 GRAVITON VALIDATOR - USAGE INSTRUCTIONS"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "📦 S3 Bucket: $BUCKET_NAME"
-    echo "🔧 Batch Queue: $QUEUE_NAME"
-    echo "📊 Dashboard: $DASHBOARD_URL"
-    echo ""
-    
-    # Check EventBridge status (now managed by Terraform)
-    if aws s3api get-bucket-notification-configuration --bucket "$BUCKET_NAME" 2>/dev/null | grep -q "EventBridgeConfiguration"; then
-        echo "✅ EventBridge notifications: ENABLED"
-    else
-        echo "⚠️  EventBridge notifications: NOT ENABLED"
-    fi
-    
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "📝 INDIVIDUAL MODE (One SBOM at a time):"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "  aws s3 cp your-sbom.json s3://$BUCKET_NAME/input/individual/"
-    echo ""
-    echo "  ✅ Automatically triggers Batch job"
-    echo "  ✅ Results: s3://$BUCKET_NAME/output/individual/your-sbom/"
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "📝 BATCH MODE (Multiple SBOMs per project):"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "  # Step 1: Upload SBOMs (no trigger)"
-    echo "  aws s3 cp app1.sbom.json s3://$BUCKET_NAME/input/batch/my-project/"
-    echo "  aws s3 cp app2.sbom.json s3://$BUCKET_NAME/input/batch/my-project/"
-    echo ""
-    echo "  # Step 2: Create manifest (filenames only)"
-    echo "  cat > batch-manifest.txt <<EOF"
-    echo "app1.sbom.json"
-    echo "app2.sbom.json"
-    echo "EOF"
-    echo ""
-    echo "  # Step 3: Upload manifest (triggers ONE job)"
-    echo "  aws s3 cp batch-manifest.txt s3://$BUCKET_NAME/input/batch/my-project/"
-    echo ""
-    echo "  ✅ Triggers single Batch job for entire project"
-    echo "  ✅ Results: s3://$BUCKET_NAME/output/batch/my-project/"
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "🔍 MONITORING:"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "  # Check Batch jobs"
-    echo "  aws batch list-jobs --job-queue $QUEUE_NAME --job-status RUNNING"
-    echo ""
-    echo "  # View logs"
-    echo "  aws logs tail /aws/batch/graviton-validator --follow"
-    echo ""
-    echo "  # Check results"
-    echo "  aws s3 ls s3://$BUCKET_NAME/output/individual/"
-    echo "  aws s3 ls s3://$BUCKET_NAME/output/batch/"
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-}
+Usage:
+  $0 [deploy|destroy] [options]
 
-case "${1:-deploy}" in
-    "deploy")
-        check_prerequisites
-        deploy_terraform
-        verify_deployment
-        print_status "🎉 AWS Batch Infrastructure Deployed!"
-        show_test_instructions
-        ;;
-    "terraform")
-        check_prerequisites
-        deploy_terraform
-        ;;
-    "verify")
-        verify_deployment
-        ;;
-    "destroy")
-        print_warning "Destroying infrastructure..."
-        cd terraform 2>/dev/null || { print_error "No terraform directory found"; exit 1; }
-        BUCKET_NAME=$(terraform output -raw s3_bucket_name 2>/dev/null)
-        cd ..
-        
-        if [ ! -z "$BUCKET_NAME" ]; then
-            print_warning "Emptying S3 bucket: $BUCKET_NAME"
-            aws s3 rm s3://$BUCKET_NAME --recursive 2>/dev/null || true
-        fi
-        
-        cd terraform && terraform destroy && cd ..
-        print_status "Infrastructure destroyed!"
-        ;;
-    "status")
-        cd terraform 2>/dev/null || { print_error "No terraform directory found"; exit 1; }
-        QUEUE_NAME=$(terraform output -raw batch_job_queue_name 2>/dev/null)
-        BUCKET_NAME=$(terraform output -raw s3_bucket_name 2>/dev/null)
-        cd ..
-        
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "📊 Deployment Status"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "Batch Queue: $QUEUE_NAME"
-        echo "S3 Bucket: $BUCKET_NAME"
-        echo ""
-        
-        if [ ! -z "$QUEUE_NAME" ]; then
-            echo "Recent Jobs:"
-            aws batch list-jobs --job-queue "$QUEUE_NAME" --max-items 5 2>/dev/null || echo "No jobs found"
-        fi
-        ;;
-    "test")
-        show_test_instructions
-        ;;
-    "trigger")
-        cd terraform 2>/dev/null || { print_error "No terraform directory found"; exit 1; }
-        LAMBDA_NAME=$(terraform output -raw lambda_function_name 2>/dev/null)
-        BUCKET_NAME=$(terraform output -raw s3_bucket_name 2>/dev/null)
-        cd ..
-        
-        print_status "Manually triggering Lambda..."
-        cat > /tmp/test-event.json <<EOF
-{
-  "detail": {
-    "bucket": {
-      "name": "$BUCKET_NAME"
-    },
-    "object": {
-      "key": "input/individual/sample_syft_sbom.json"
-    }
-  }
-}
+Commands:
+  deploy                Deploy infrastructure (default)
+  destroy               Destroy infrastructure
+  
+Options:
+  --state-bucket NAME   Use existing S3 bucket for Terraform state
+  --delete-state        Delete state bucket when destroying (use with destroy)
+  --region REGION       AWS region (default: us-east-1)
+  --help               Show this help message
+
+Examples:
+  $0                                    # Deploy with auto-created state bucket
+  $0 deploy --state-bucket my-bucket    # Deploy with existing state bucket
+  $0 destroy                           # Destroy but keep state bucket
+  $0 destroy --delete-state            # Destroy and delete state bucket
+
+Environment Variables:
+  AWS_REGION           AWS region (default: us-east-1)
 EOF
-        aws lambda invoke --function-name "$LAMBDA_NAME" --cli-binary-format raw-in-base64-out --payload file:///tmp/test-event.json /tmp/response.json
-        cat /tmp/response.json
-        echo ""
-        ;;
-    "monitor")
-        cd terraform 2>/dev/null || { print_error "No terraform directory found"; exit 1; }
-        QUEUE_NAME=$(terraform output -raw batch_job_queue_name 2>/dev/null)
-        DASHBOARD_URL=$(terraform output -raw dashboard_url 2>/dev/null)
-        cd ..
-        
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "📊 Monitoring"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "Batch Queue: $QUEUE_NAME"
-        echo "Dashboard: $DASHBOARD_URL"
-        echo ""
-        echo "Monitoring Batch job logs (Ctrl+C to exit)..."
-        aws logs tail /aws/batch/graviton-validator --follow
-        ;;
-    "help"|"-h"|"--help")
-        show_usage
-        ;;
-    *)
-        print_error "Unknown command: $1"
-        show_usage
-        exit 1
-        ;;
-esac
+}
+
+main() {
+    local command="deploy"
+    local state_bucket=""
+    local delete_state="false"
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            deploy|destroy)
+                command="$1"
+                shift
+                ;;
+            --state-bucket)
+                state_bucket="$2"
+                shift 2
+                ;;
+            --delete-state)
+                delete_state="true"
+                shift
+                ;;
+            --region)
+                AWS_REGION="$2"
+                shift 2
+                ;;
+            --help)
+                show_usage
+                exit 0
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                show_usage
+                exit 1
+                ;;
+        esac
+    done
+    
+    check_prerequisites
+    
+    case $command in
+        deploy)
+            local bucket=$(get_state_bucket "$state_bucket")
+            deploy_terraform "$bucket"
+            
+            cd terraform
+            local s3_bucket=$(terraform output -raw s3_bucket_name)
+            cd ..
+            
+            enable_eventbridge "$s3_bucket"
+            verify_deployment "$s3_bucket"
+            
+            print_status "🎉 Deployment completed successfully!"
+            echo
+            echo "Next steps:"
+            echo "1. Upload SBOM files to: s3://$s3_bucket/input/individual/"
+            echo "2. Monitor jobs: aws batch list-jobs --job-queue $(cd terraform && terraform output -raw batch_job_queue_name)"
+            echo "3. View results: aws s3 ls s3://$s3_bucket/output/ --recursive"
+            echo "4. Dashboard: $(cd terraform && terraform output -raw dashboard_url)"
+            ;;
+        destroy)
+            destroy_terraform "$delete_state"
+            print_status "🗑️  Infrastructure destroyed!"
+            ;;
+    esac
+}
+
+main "$@"

@@ -5,6 +5,7 @@ Utility scripts for maintaining knowledge bases used by the Migration Accelerato
 ## Scripts Overview
 
 ### OS Package Databases
+- **`os_kb_updater.py`** - **NEW**: Automated OS KB updater with metadata tracking
 - **`generate_all_os_kb.sh`** - Generate knowledge bases for all supported OS versions
 - **`generate_docker_kb.sh`** - Generate knowledge base for specific OS version
 - **`dump_os_packages.sh`** - Extract packages from running Graviton instance
@@ -20,6 +21,36 @@ Utility scripts for maintaining knowledge bases used by the Migration Accelerato
 ---
 
 ## OS Package Databases
+
+### Automated OS KB Updater (Recommended)
+
+```bash
+cd scripts
+
+# Update OS KBs required by SBOM (only if stale)
+python os_kb_updater.py --sbom ../examples/sample_cyclonedx_sbom.json
+
+# Force update regardless of age
+python os_kb_updater.py --sbom ../examples/sample_cyclonedx_sbom.json --force
+
+# Update specific OS
+python os_kb_updater.py --os ubuntu --version 22.04
+
+# List stale KBs
+python os_kb_updater.py --list-stale
+
+# Update all stale KBs
+python os_kb_updater.py --update-all-stale
+```
+
+**Features:**
+- Tracks last update timestamp for each OS KB
+- Only updates OS versions present in SBOM
+- Automatically detects and generates KBs for new OS versions
+- Parallel updates for multiple OS versions
+- Integrated into main validator (runs automatically)
+
+See [OS KB Auto-Update Guide](../docs/OS_KB_AUTO_UPDATE.md) for details.
 
 ### Generate All OS Knowledge Bases
 

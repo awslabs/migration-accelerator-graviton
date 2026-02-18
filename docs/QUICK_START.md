@@ -25,10 +25,22 @@ cd migration-accelerator-graviton
 ./deploy.sh
 
 # The deploy script automatically:
+# - Creates/manages Terraform state bucket
 # - Deploys Terraform infrastructure
 # - Enables S3 EventBridge notifications
 # - Verifies deployment
 # - Shows usage instructions
+
+# Alternative: Use existing state bucket
+./deploy.sh deploy --state-bucket my-existing-bucket
+
+# Manual deployment (requires state bucket)
+cd terraform
+terraform init \
+  -backend-config="bucket=my-terraform-state-bucket" \
+  -backend-config="region=us-east-1"
+terraform apply
+cd ..
 ```
 
 ### Step 2: Upload Your Files
@@ -107,42 +119,43 @@ pip install -r requirements.txt
 ### Step 2: Basic Analysis
 
 ```bash
-# Analyze SBOM file (knowledge base only)
-python graviton_validator.py examples/sample_cyclonedx.json
+# Analyze SBOM file (default: tests in container if Docker available)
+python graviton_validator.py examples/sample_cyclonedx_sbom.json
 
 # Analyze multiple SBOM files
 python graviton_validator.py sbom1.json sbom2.json
 
 # Analyze directory of SBOM files
 python graviton_validator.py -d ./sbom-files/
+
+# Fast static analysis only (no installation testing)
+# Also enriches unknown packages via ARM Ecosystem Dashboard and checks container image ARM64 support
+python graviton_validator.py examples/sample_cyclonedx_sbom.json --static-only
 ```
 
-### Step 3: Enhanced Analysis (Recommended)
+### Step 3: CI/CD & Advanced Usage
 
 ```bash
-# With runtime testing (actually tests package installation)
-python graviton_validator.py my-app-sbom.json --runtime --test --containers
-
-# Generate Excel report
-python graviton_validator.py my-app-sbom.json --runtime --test --containers -f excel -o report.xlsx
+# Non-interactive mode (for CI/CD pipelines)
+python graviton_validator.py my-app-sbom.json --yes -f excel -o report.xlsx
 
 # Multi-stage analysis for large applications
-python graviton_validator.py --sbom-only my-app-sbom.json
-python graviton_validator.py --runtime-only auto --test --containers
-python graviton_validator.py --merge-runtime ./output_files/ -f excel
+python graviton_validator.py --extract-manifests my-app-sbom.json
+python graviton_validator.py --test-manifests auto --yes
+python graviton_validator.py --merge-results ./output_files/ -f excel
 ```
 
 ### Step 4: Advanced Features
 
 ```bash
-# Batch analysis with runtime testing
-python graviton_validator.py -d ./sbom-files/ --runtime --test --containers -f excel
+# Batch analysis
+python graviton_validator.py -d ./sbom-files/ --yes -f excel
 
-# Include JAR analysis
-python graviton_validator.py my-app-sbom.json --runtime --test --jars examples/JARs/*.jar -f excel
+# Test on local system (development only)
+python graviton_validator.py my-app-sbom.json --test-local --jars examples/JARs/*.jar -f excel
 
 # Custom knowledge base
-python graviton_validator.py my-app-sbom.json -k custom_kb.json --runtime --test
+python graviton_validator.py my-app-sbom.json -k custom_kb.json --static-only
 ```
 
 ---
@@ -195,77 +208,77 @@ Graviton Compatibility Analysis Report
 
 ```bash
 # Analyze Java SBOM with runtime testing
-python graviton_validator.py java-app-sbom.json --runtime --test --containers
+python graviton_validator.py java-app-sbom.json --yes
 
 # Include additional JAR files
-python graviton_validator.py java-app-sbom.json --jars examples/JARs/*.jar --runtime --test
+python graviton_validator.py java-app-sbom.json --jars examples/JARs/*.jar --test-local
 
 # Generate detailed Excel report
-python graviton_validator.py java-app-sbom.json --runtime --test --containers -f excel -o java-compatibility.xlsx
+python graviton_validator.py java-app-sbom.json --yes -f excel -o java-compatibility.xlsx
 ```
 
 ### Python Applications
 
 ```bash
 # Analyze Python SBOM with pip testing
-python graviton_validator.py python-app-sbom.json --runtime --test --containers
+python graviton_validator.py python-app-sbom.json --yes
 
 # With custom knowledge base
-python graviton_validator.py python-app-sbom.json -k knowledge_bases/python_runtime_dependencies.json --runtime --test
+python graviton_validator.py python-app-sbom.json -k knowledge_bases/python_runtime_dependencies.json --test-local
 
 # Multi-stage for large Python applications
-python graviton_validator.py --sbom-only python-app-sbom.json
-python graviton_validator.py --runtime-only python --test --containers
+python graviton_validator.py --extract-manifests python-app-sbom.json
+python graviton_validator.py --test-manifests python --yes
 ```
 
 ### Node.js Applications
 
 ```bash
 # Analyze Node.js SBOM with npm testing
-python graviton_validator.py nodejs-app-sbom.json --runtime --test --containers
+python graviton_validator.py nodejs-app-sbom.json --yes
 
 # Focus on native modules (critical for ARM64)
-python graviton_validator.py nodejs-app-sbom.json --runtime --test --containers --detailed
+python graviton_validator.py nodejs-app-sbom.json --yes --verbose-output
 ```
 
 ### .NET Applications
 
 ```bash
 # Analyze .NET SBOM with NuGet testing
-python graviton_validator.py dotnet-app-sbom.json --runtime --test --containers
+python graviton_validator.py dotnet-app-sbom.json --yes
 
 # Batch analysis for multiple .NET applications
-python graviton_validator.py -d ./dotnet-sboms/ --runtime --test --containers -f excel
+python graviton_validator.py -d ./dotnet-sboms/ --yes -f excel
 ```
 
 ### Multi-Runtime Applications
 
 ```bash
 # Analyze SBOM with multiple runtimes detected
-python graviton_validator.py mixed-app-sbom.json --runtime --test --containers -f excel
+python graviton_validator.py mixed-app-sbom.json --yes -f excel
 
 # Multi-stage analysis for optimal performance
-python graviton_validator.py --sbom-only mixed-app-sbom.json
-python graviton_validator.py --runtime-only auto --test --containers
-python graviton_validator.py --merge-runtime ./output_files/ -f excel -o final-report.xlsx
+python graviton_validator.py --extract-manifests mixed-app-sbom.json
+python graviton_validator.py --test-manifests auto --yes
+python graviton_validator.py --merge-results ./output_files/ -f excel -o final-report.xlsx
 
 # Selective runtime analysis
-python graviton_validator.py --runtime-only python --input-dir ./output_files/ --test --containers
-python graviton_validator.py --runtime-only java --input-dir ./output_files/ --test --containers
+python graviton_validator.py --test-manifests python --input-dir ./output_files/ --yes
+python graviton_validator.py --test-manifests java --input-dir ./output_files/ --yes
 ```
 
 ### Enterprise Portfolio Analysis
 
 ```bash
 # Analyze entire application portfolio
-python graviton_validator.py -d ./enterprise-sboms/ --runtime --test --containers --output-dir ./portfolio-results/
+python graviton_validator.py -d ./enterprise-sboms/ --yes --output-dir ./portfolio-results/
 
 # Generate consolidated portfolio report
-python graviton_validator.py --merge ./portfolio-results/*.json -f excel -o portfolio-compatibility.xlsx
+python graviton_validator.py --merge-reports ./portfolio-results/*.json -f excel -o portfolio-compatibility.xlsx
 
 # Focus on specific technology stacks
-python graviton_validator.py -d ./java-sboms/ --runtime --test --containers -f excel -o java-portfolio.xlsx
-python graviton_validator.py -d ./python-sboms/ --runtime --test --containers -f excel -o python-portfolio.xlsx
+python graviton_validator.py -d ./java-sboms/ --yes -f excel -o java-portfolio.xlsx
+python graviton_validator.py -d ./python-sboms/ --yes -f excel -o python-portfolio.xlsx
 ```
 
 ---
@@ -292,7 +305,7 @@ python graviton_validator.py /full/path/to/sbom.json
 # For .NET: Install dotnet CLI
 
 # Or use container mode to avoid local dependencies
-python graviton_validator.py sbom.json --runtime --test --containers
+python graviton_validator.py sbom.json --yes
 ```
 
 #### "Permission denied" (AWS)
@@ -307,13 +320,13 @@ aws s3 ls s3://your-bucket-name/
 #### "Analysis failed"
 ```bash
 # Enable debug logging
-python graviton_validator.py sbom.json --debug -v
+python graviton_validator.py sbom.json -vv
 
 # Check log file and keep temp files
 python graviton_validator.py sbom.json --log-file analysis.log --no-cleanup
 
 # Test with example files
-python graviton_validator.py examples/sample_cyclonedx.json -v
+python graviton_validator.py examples/sample_cyclonedx_sbom.json -v
 ```
 
 ### Getting Help

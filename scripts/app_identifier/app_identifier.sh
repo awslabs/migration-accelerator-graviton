@@ -895,6 +895,317 @@ validate_version() {
     return 1
 }
 
+# =============================================================================
+# Container Discovery Functions
+# =============================================================================
+
+# Runtime manifest files to scan for inside container filesystems
+readonly CONTAINER_MANIFEST_NAMES=(
+    "requirements.txt" "Pipfile" "pyproject.toml"
+    "package.json"
+    "pom.xml" "build.gradle"
+    "Gemfile" "*.gemspec"
+    "*.csproj" "packages.config"
+)
+
+# Detect available container runtime (read-only check)
+detect_container_runtime() {
+    for rt in crictl docker podman nerdctl; do
+        if command -v "$rt" >/dev/null 2>&1; then
+            log "DEBUG" "Found container runtime: $rt"
+            echo "$rt"
+            return 0
+        fi
+    done
+    log "DEBUG" "No container runtime found"
+    return 1
+}
+
+# List running containers. Outputs: container_id<tab>container_name<tab>image_name
+list_running_containers() {
+    local runtime="$1"
+    log "DEBUG" "Listing running containers via $runtime"
+
+    case "$runtime" in
+        crictl)
+            crictl ps -o json 2>/dev/null | jq -r '
+                .containers[]? |
+                "\(.id)\t\(.metadata.name // .id[:12])\t\(.image.image // .imageRef)"
+            ' 2>/dev/null
+            ;;
+        docker|podman|nerdctl)
+            "$runtime" ps --format '{{.ID}}\t{{.Names}}\t{{.Image}}' --no-trunc 2>/dev/null
+            ;;
+    esac
+}
+
+# Get the merged/root filesystem path for a container (read-only inspect)
+get_container_rootfs() {
+    local runtime="$1"
+    local container_id="$2"
+
+    case "$runtime" in
+        crictl)
+            crictl inspect "$container_id" 2>/dev/null | jq -r '.info.runtimeSpec.root.path // empty' 2>/dev/null
+            ;;
+        docker|podman|nerdctl)
+            "$runtime" inspect "$container_id" --format '{{.GraphDriver.Data.MergedDir}}' 2>/dev/null
+            ;;
+    esac
+}
+
+# Attempt to detect base image from OCI labels or layer history
+detect_base_image() {
+    local runtime="$1"
+    local container_id="$2"
+
+    case "$runtime" in
+        crictl)
+            # Try OCI annotation
+            crictl inspect "$container_id" 2>/dev/null | jq -r '
+                .info.config.Labels["org.opencontainers.image.base.name"] //
+                .info.config.image // empty
+            ' 2>/dev/null
+            ;;
+        docker|podman|nerdctl)
+            # Try OCI label first, then image history comment
+            local base
+            base=$("$runtime" inspect "$container_id" 2>/dev/null | jq -r '
+                .[0].Config.Labels["org.opencontainers.image.base.name"] // empty
+            ' 2>/dev/null)
+            if [[ -z "$base" ]]; then
+                local image
+                image=$("$runtime" inspect "$container_id" --format '{{.Image}}' 2>/dev/null)
+                if [[ -n "$image" ]]; then
+                    base=$("$runtime" history "$image" --format '{{.CreatedBy}}' --no-trunc 2>/dev/null | \
+                        grep -oP '(?<=FROM )\S+' | tail -1)
+                fi
+            fi
+            echo "$base"
+            ;;
+    esac
+}
+
+# Read OS package database directly from container overlay filesystem
+# Outputs tab-separated: name<tab>version<tab>vendor<tab>description
+read_container_packages() {
+    local rootfs="$1"
+
+    # Debian/Ubuntu - dpkg
+    if [[ -f "${rootfs}/var/lib/dpkg/status" ]]; then
+        log "DEBUG" "Reading dpkg status from container filesystem"
+        awk '/^Package:/{name=$2} /^Version:/{ver=$2} /^Maintainer:/{maint=$2} /^Description:/{desc=substr($0,14)} /^$/{if(name!="" && ver!="") print name"\t"ver"\t"maint"\t"desc; name="";ver="";maint="";desc=""}' \
+            "${rootfs}/var/lib/dpkg/status" 2>/dev/null
+        return
+    fi
+
+    # RHEL/Amazon Linux - rpm
+    local rpmdb=""
+    for candidate in "${rootfs}/var/lib/rpm" "${rootfs}/usr/lib/sysimage/rpm"; do
+        if [[ -d "$candidate" ]]; then
+            rpmdb="$candidate"
+            break
+        fi
+    done
+    if [[ -n "$rpmdb" ]]; then
+        log "DEBUG" "Reading rpm db from container filesystem"
+        rpm --dbpath "$rpmdb" -qa --queryformat '%{NAME}\t%{VERSION}\t%{VENDOR}\t%{SUMMARY}\n' 2>/dev/null
+        return
+    fi
+
+    # Alpine - apk
+    if [[ -f "${rootfs}/lib/apk/db/installed" ]]; then
+        log "DEBUG" "Reading apk db from container filesystem"
+        awk '/^P:/{name=$0; sub(/^P:/,"",name)} /^V:/{ver=$0; sub(/^V:/,"",ver)} /^$/{if(name!="" && ver!="") print name"\t"ver"\tAlpine\tAlpine package"; name="";ver=""}' \
+            "${rootfs}/lib/apk/db/installed" 2>/dev/null
+        return
+    fi
+
+    log "DEBUG" "No recognized package DB found in container filesystem"
+}
+
+# Find runtime manifest files in container filesystem
+find_container_manifests() {
+    local rootfs="$1"
+    local find_args=()
+
+    for name in "${CONTAINER_MANIFEST_NAMES[@]}"; do
+        if [[ ${#find_args[@]} -gt 0 ]]; then
+            find_args+=("-o")
+        fi
+        find_args+=("-name" "$name")
+    done
+
+    find "$rootfs" -maxdepth 10 \( "${find_args[@]}" \) -not -path "*/node_modules/*" -not -path "*/.venv/*" -not -path "*/site-packages/pip/*" 2>/dev/null
+}
+
+# Generate a CycloneDX SBOM for a single container
+generate_container_sbom() {
+    local output_file="$1"
+    local container_name="$2"
+    local image_name="$3"
+    local base_image="$4"
+    local system_info="$5"
+    local rootfs="$6"
+
+    local serial_number="urn:uuid:$(generate_uuid)"
+    local timestamp="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    local hostname=$(echo "$system_info" | jq -r '.hostname')
+    local instance_id=$(echo "$system_info" | jq -r '.ec2.instance_id // empty')
+
+    # Collect packages
+    local components_file=$(mktemp)
+    echo '[]' > "$components_file"
+
+    # OS-level packages from container filesystem
+    local pkg_count=0
+    while IFS=$'\t' read -r name version vendor description; do
+        [[ -z "$name" || -z "$version" ]] && continue
+        jq --argjson c "$(jq -n \
+            --arg name "$name" --arg version "$version" \
+            --arg vendor "${vendor:-Unknown}" --arg desc "${description:-}" \
+            '{type:"library","bom-ref":($name+"@"+$version),name:$name,version:$version,supplier:{name:$vendor},description:$desc,properties:[{name:"package:type",value:"container-os-package"}]}'
+        )" '. += [$c]' "$components_file" > "${components_file}.tmp" && mv "${components_file}.tmp" "$components_file"
+        ((pkg_count++))
+    done < <(read_container_packages "$rootfs")
+    log "DEBUG" "Found $pkg_count OS packages in container $container_name"
+
+    # Runtime manifest files - add as components with file content reference
+    local manifest_count=0
+    while IFS= read -r manifest_path; do
+        [[ -z "$manifest_path" ]] && continue
+        local rel_path="${manifest_path#${rootfs}}"
+        local manifest_name=$(basename "$manifest_path")
+        jq --argjson c "$(jq -n \
+            --arg name "$manifest_name" --arg path "$rel_path" \
+            '{type:"file","bom-ref":("manifest:"+$path),name:$name,version:"",description:("Runtime manifest: "+$path),properties:[{name:"package:type",value:"container-manifest"},{name:"manifest:path",value:$path}]}'
+        )" '. += [$c]' "$components_file" > "${components_file}.tmp" && mv "${components_file}.tmp" "$components_file"
+        ((manifest_count++))
+    done < <(find_container_manifests "$rootfs")
+    log "DEBUG" "Found $manifest_count manifest files in container $container_name"
+
+    # Build SBOM
+    jq -n \
+        --arg bomFormat "CycloneDX" \
+        --arg specVersion "$SPEC_VERSION" \
+        --arg serialNumber "$serial_number" \
+        --arg timestamp "$timestamp" \
+        --arg container_name "$container_name" \
+        --arg image_name "$image_name" \
+        --arg base_image "${base_image:-unknown}" \
+        --arg hostname "$hostname" \
+        --arg instance_id "${instance_id:-}" \
+        --slurpfile components "$components_file" \
+        '{
+            bomFormat: $bomFormat,
+            specVersion: $specVersion,
+            serialNumber: $serialNumber,
+            version: 1,
+            metadata: {
+                timestamp: $timestamp,
+                tools: [{vendor:"AWS",name:"graviton-migration-accelerator",version:"1.0.0"}],
+                component: {
+                    type: "container",
+                    name: $container_name,
+                    version: $image_name,
+                    description: ("Container: " + $container_name + " Image: " + $image_name)
+                },
+                properties: [
+                    {name:"container:image", value:$image_name},
+                    {name:"container:base-image", value:$base_image},
+                    {name:"container:name", value:$container_name},
+                    {name:"instance:hostname", value:$hostname},
+                    {name:"instance:id", value:$instance_id}
+                ]
+            },
+            components: $components[0]
+        }' > "$output_file"
+
+    rm -f "$components_file"
+    log "INFO" "Generated container SBOM: $output_file ($pkg_count packages, $manifest_count manifests)"
+}
+
+# =============================================================================
+# End Container Discovery Functions
+# =============================================================================
+
+# Post-generation container discovery: appends container components to existing host SBOM
+discover_containers_post() {
+    local host_sbom="$1"
+    local output_dir="$2"
+    local system_info="$3"
+
+    # Detect runtime
+    local runtime
+    if ! runtime=$(detect_container_runtime); then
+        log "INFO" "No container runtime detected - skipping container discovery"
+        return 0
+    fi
+    log "INFO" "Detected container runtime: $runtime"
+
+    local is_root=false
+    [[ $(id -u) -eq 0 ]] && is_root=true
+
+    if [[ "$is_root" != "true" ]]; then
+        log "WARNING" "Not running as root - container filesystem inspection will be skipped (container image references will still be added to host SBOM)"
+    fi
+
+    local container_count=0
+    local seen_images=""
+
+    while IFS=$'\t' read -r cid cname cimage; do
+        [[ -z "$cid" ]] && continue
+        ((container_count++))
+        log "INFO" "Discovered container: $cname (image: $cimage)"
+
+        # Detect base image
+        local base_image
+        base_image=$(detect_base_image "$runtime" "$cid")
+
+        # Append container component to host SBOM
+        local tmp_sbom="${host_sbom}.tmp"
+        jq --arg name "$cname" --arg image "$cimage" --arg base "${base_image:-unknown}" \
+            '.components += [{
+                type: "container",
+                "bom-ref": ("container:" + $name),
+                name: $name,
+                version: $image,
+                description: ("Container image: " + $image),
+                properties: [
+                    {name: "container:image", value: $image},
+                    {name: "container:base-image", value: $base},
+                    {name: "package:type", value: "container-image"}
+                ]
+            }]' "$host_sbom" > "$tmp_sbom" && mv "$tmp_sbom" "$host_sbom"
+
+        # Generate per-container SBOM only if root and image not already processed
+        if [[ "$is_root" == "true" ]]; then
+            if echo "$seen_images" | grep -qF "$cimage"; then
+                log "DEBUG" "Skipping duplicate image: $cimage (already scanned)"
+                continue
+            fi
+            seen_images="${seen_images}${cimage}\n"
+
+            local rootfs
+            rootfs=$(get_container_rootfs "$runtime" "$cid")
+            if [[ -n "$rootfs" && -d "$rootfs" ]]; then
+                local safe_name=$(echo "${cname}_${cimage}" | tr '/:' '_')
+                local instance_id=$(echo "$system_info" | jq -r '.ec2.instance_id // "unknown"')
+                local container_sbom="${output_dir}/sbom_container_${instance_id}_${safe_name}.json"
+                generate_container_sbom "$container_sbom" "$cname" "$cimage" "$base_image" "$system_info" "$rootfs"
+            else
+                log "WARNING" "Could not access rootfs for container $cname ($cid)"
+            fi
+        fi
+    done < <(list_running_containers "$runtime")
+
+    if [[ $container_count -eq 0 ]]; then
+        log "INFO" "No running containers found"
+    else
+        log "INFO" "Discovered $container_count running containers"
+    fi
+}
+
 # Function to check available memory
 check_memory() {
     local available_mem
@@ -1304,12 +1615,17 @@ identify_applications() {
     log "INFO" "Getting system information"
     local system_info=$(get_system_info)
 
-    # Generate SBOM output
+    # Generate SBOM output (creates components_file internally)
     log "INFO" "Writing SBOM results to $output_file"
     if ! generate_sbom_output "$output_file" running_apps[@] installed_pkgs[@] "$system_info" "$errors"; then
         log "ERROR" "Failed to write SBOM output to $output_file"
         return 1
     fi
+
+    # Run container discovery - adds container components to host SBOM and generates per-container SBOMs
+    local output_dir=$(dirname "$output_file")
+    log "INFO" "Starting container discovery"
+    discover_containers_post "$output_file" "$output_dir" "$system_info"
 
     # Validate the generated JSON
     if ! validate_json "$output_file"; then

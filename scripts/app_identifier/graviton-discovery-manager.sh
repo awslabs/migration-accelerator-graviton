@@ -227,7 +227,7 @@ download() {
     info "Downloading from $bucket to $dir"
     
     # List all SBOM files and download them to the same directory (flatten structure)
-    local files=$(aws s3 ls "s3://$bucket/graviton-discovery/" --recursive | grep "\.sbom\.json$" | awk '{print $4}')
+    local files=$(aws s3 ls "s3://$bucket/graviton-discovery/" --recursive | grep -E "\.sbom\.json$|sbom_container_.*\.json$" | awk '{print $4}')
     
     if [[ -z "$files" ]]; then
         warn "No SBOM files found in S3 bucket"

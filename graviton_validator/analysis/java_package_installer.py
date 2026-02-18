@@ -274,7 +274,7 @@ class JavaCompatibilityAnalyzer:
                 component.properties['native_build_detected'] = 'Yes'
                 if compatibility.status == CompatibilityStatus.UNKNOWN:
                     compatibility.status = CompatibilityStatus.NEEDS_VERIFICATION
-                    compatibility.notes = "Native code requires ARM64 verification"
+                    compatibility.notes = 'Native code detected. Needs manual verification: could not confirm ARM64 compatibility'
                     debug(f"[BASIC_CHECK_NATIVE_RESULT] Marked as NEEDS_VERIFICATION due to native code")
                 break
         
@@ -324,7 +324,7 @@ class JavaCompatibilityAnalyzer:
                     debug(f"[JAR_ANALYSIS_X86_ONLY] x86-only native libraries found")
                     compatibility.status = CompatibilityStatus.INCOMPATIBLE
                     compatibility.current_version_supported = False
-                    compatibility.notes = "x86-only native libraries found"
+                    compatibility.notes = "x86-only native libraries detected. Needs manual verification: may not work on ARM64/Graviton"
                     component.properties['error_type'] = 'native_build'
                 elif native_info['has_jni'] and not native_info['fallback_available']:
                     debug(f"[JAR_ANALYSIS_JNI_NO_FALLBACK] JNI methods without fallback detected")
@@ -1348,11 +1348,11 @@ def analyze_jar_directory(jar_dir: str, runtime_test: bool = False) -> List[Comp
                 elif native_info['x86_specific']:
                     debug(f"[JAR_DIR_ANALYSIS_COMPAT] x86-only support detected")
                     compatibility.status = CompatibilityStatus.NEEDS_VERIFICATION
-                    compatibility.notes = 'x86-only native libraries, ARM64 support unclear'
+                    compatibility.notes = 'x86-only native libraries detected. Needs manual verification: ARM64 support unclear'
                 else:
                     debug(f"[JAR_DIR_ANALYSIS_COMPAT] Native code with unclear architecture")
                     compatibility.status = CompatibilityStatus.NEEDS_VERIFICATION
-                    compatibility.notes = 'Native libraries detected, architecture unclear'
+                    compatibility.notes = 'Native libraries detected. Needs manual verification: could not determine architecture'
             else:
                 debug(f"[JAR_DIR_ANALYSIS_COMPAT] Pure Java JAR detected")
                 component.properties['native_build_detected'] = 'No'

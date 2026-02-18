@@ -22,6 +22,16 @@ wheels/
 assets/
 terraform.tfstate*
 .terraform
+
+# Tests
+tests/
+test_*.py
+*_test.py
+pytest_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Virtual Environment
 venv/
 ENV/
@@ -105,3 +115,7 @@ scan-report-*/
 codepipeline_trigger.zip
 TODO.md
 dummy-source-corrected.zip
+
+# Output files (except README)
+output_files/*
+!output_files/README.md

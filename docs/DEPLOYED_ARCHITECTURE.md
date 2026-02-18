@@ -122,7 +122,7 @@ This document describes the actual deployed infrastructure for the Migration Acc
 │  3. Retrieve IAM credentials from EC2 instance metadata (IMDSv2)            │
 │  4. Download validator tool from S3 (code/migration-accelerator-graviton.zip)│
 │  5. Download SBOM file(s) from S3                                           │
-│  6. Run graviton_validator.py with --runtime --test --containers flags      │
+│  6. Run graviton_validator.py with --yes flags      │
 │  7. Upload results (Excel, JSON, Markdown) to S3 output/ folder             │
 │                                                                              │
 │  Logging:                                                                    │
@@ -338,7 +338,7 @@ Step 11: Container starts and downloads manifest + all SBOMs
          • Downloads each SBOM file to ./sboms/ directory
          ↓
 Step 12: Runs graviton_validator.py in directory mode
-         • python3.11 graviton_validator.py -d ./sboms --runtime --test --containers
+         • python3.11 graviton_validator.py -d ./sboms --yes
          • Processes all SBOMs in parallel
          • Generates consolidated report
          ↓

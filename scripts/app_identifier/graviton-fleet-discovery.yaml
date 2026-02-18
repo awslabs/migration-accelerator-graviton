@@ -314,6 +314,14 @@ Resources:
                       exit 1
                   fi
                   
+                  # Upload container SBOMs if any were generated
+                  for container_sbom in sbom_container_*.json; do
+                      [[ -f "$container_sbom" ]] || continue
+                      CONTAINER_S3_KEY="${S3_PREFIX}/${INSTANCE_ID}/${container_sbom}"
+                      echo "Uploading container SBOM to s3://${S3_BUCKET}/${CONTAINER_S3_KEY}"
+                      aws s3 cp "$container_sbom" "s3://${S3_BUCKET}/${CONTAINER_S3_KEY}" --region "$REGION" || echo "Warning: Failed to upload $container_sbom"
+                  done
+                  
                   # Cleanup
                   cd /tmp
                   rm -rf "$WORK_DIR"

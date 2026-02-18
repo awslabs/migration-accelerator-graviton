@@ -468,7 +468,7 @@ class ContainerExecutionEnvironment(ExecutionEnvironment):
             logger.debug(f"=== END DEBUG INFO ===")
             
             run_result = subprocess.run(
-                container_run_cmd, capture_output=True, text=True, timeout=180
+                container_run_cmd, capture_output=True, text=True, timeout=kwargs.get('container_timeout', 180)
             )
             
             logger.debug(f"Container analysis completed - Return code: {run_result.returncode}")
@@ -574,7 +574,7 @@ class ContainerExecutionEnvironment(ExecutionEnvironment):
             }
             
         except subprocess.TimeoutExpired:
-            logger.error(f"Container analysis timed out for {runtime} after 180 seconds")
+            logger.error(f"Container analysis timed out for {runtime} after {kwargs.get('container_timeout', 180)} seconds")
             return {
                 'success': False,
                 'error': f'Container analysis timed out for {runtime}',

@@ -20,12 +20,14 @@ This script collects the following information **locally from your system**:
 - **Package ownership**: System packages that provided each process executable (RPM, DEB, APK, Pacman, SUSE)
 - **System information**: OS details, CPU architecture, memory, and hardware specs
 - **EC2 metadata (if available)**: Instance ID and region (only when running on AWS EC2)
+- **Container discovery (if containers present)**: Running container names, images, and base images. When running as root, also inspects container filesystems for OS packages and runtime manifest files (requirements.txt, package.json, pom.xml, Gemfile, *.csproj), generating per-container SBOMs
 
 ### Network Communication
 **Important**: This script makes **NO external network calls** except for:
 - **EC2 Instance Metadata Service (IMDS)** calls to `169.254.169.254` (only when running on EC2)
 - These calls are local to the EC2 instance and do not leave your network
 - No data is transmitted to external services or AWS APIs
+- **Container discovery** uses only local commands (`docker`/`crictl`/`podman` inspect) and reads the local overlay filesystem — no network calls
 
 ## Usage Instructions
 
@@ -77,6 +79,7 @@ Ensure the following commands are available on your system:
 ### Access Requirements
 - **Read-only System Access**: Script only reads system information
 - **No Root Required**: Can run as regular user (some package info may be limited)
+- **Root Recommended for Containers**: Container filesystem inspection requires root access; without root, container image names are still captured but per-container SBOMs are skipped
 - **Process Visibility**: Only sees processes visible to the executing user
 
 ### EC2 Metadata Access
@@ -133,6 +136,7 @@ The script uses multiple strategies to determine application versions and packag
 **Component Classification**:
 - **Applications**: Running processes classified as application components
 - **Libraries**: Installed packages classified as library components
+- **Containers**: Running container images with base image info (when containers are present)
 - **System**: OS and hardware information as system component
 
 **Data Enrichment**:
@@ -197,10 +201,23 @@ The generated SBOM file contains:
         {"name": "process:user", "value": "username"},
         {"name": "version:source", "value": "binary"}
       ]
+    },
+    {
+      "type": "container",
+      "name": "my-webapp",
+      "version": "node:22-bookworm-slim",
+      "description": "Container image: node:22-bookworm-slim",
+      "properties": [
+        {"name": "container:image", "value": "node:22-bookworm-slim"},
+        {"name": "container:base-image", "value": "debian:bookworm-slim"},
+        {"name": "package:type", "value": "container-image"}
+      ]
     }
   ]
 }
 ```
+
+When running as root with containers present, separate per-container SBOM files are also generated (e.g., `sbom_container_i-1234567890abcdef0_my-webapp_node_22-bookworm-slim.json`) containing OS packages and runtime manifest files discovered inside each container's filesystem.
 
 ## Troubleshooting
 

@@ -106,6 +106,7 @@ class ExcelReporter(ReportGenerator):
         
         # Create sheets
         self._create_summary_sheet(wb, data)
+        self._create_unique_components_sheet(wb, data, analysis_result)
         self._create_detailed_results_sheet(wb, data, analysis_result)
         self._create_recommendations_sheet(wb, data)
         
@@ -305,6 +306,9 @@ class ExcelReporter(ReportGenerator):
             
             adjusted_width = min(max(max_length + 2, 15), 50)
             ws.column_dimensions[column_letter].width = adjusted_width
+        
+        # Set column D width to 13 for better layout
+        ws.column_dimensions['D'].width = 13
     
     def _create_detailed_results_sheet(self, workbook: Workbook, data: Dict[str, Any], analysis_result: AnalysisResult = None):
         """Create detailed results sheet."""
@@ -312,9 +316,19 @@ class ExcelReporter(ReportGenerator):
         
         # Headers - conditionally include runtime analysis columns
         headers = [
-            "Component Name", "Version", "Type", "Source SBOM", "Status",
-            "Current Supported", "Min Version", "Recommended Version",
-            "Confidence", "Detected OS", "System Package", "Notes", "Matched Name"
+            "Component Name",
+            "Version",
+            "Package Type",
+            "SBOM File",
+            "Graviton Support Status",
+            # "Current Version Compatible",
+            # "Min ARM64 Supported Version",
+            # "Recommended Version for ARM64",
+            # "Confidence",
+            "Detected OS",
+            "OS-Level Package",
+            "Notes",
+            "Matched Name"
         ]
         
         # Check if any components have runtime analysis data
@@ -324,9 +338,8 @@ class ExcelReporter(ReportGenerator):
         )
         
         if has_runtime_analysis:
-            # Insert runtime analysis columns before Notes
-            headers.insert(-2, "Original Version")
-            headers.insert(-2, "Fallback Used")
+            headers.insert(-2, "Requested Version")
+            headers.insert(-2, "Version Changed")
         
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
@@ -344,18 +357,26 @@ class ExcelReporter(ReportGenerator):
             # Ensure component name is never empty
             component_name = component.get("name") or "unknown"
             
+            # Truncate SBOM file path to just filename
+            from pathlib import Path
+            sbom_file = Path(component.get("source_sbom", "unknown")).name
+            
+            # Clean up package type - strip version/environment info
+            raw_type = component.get("type", "unknown")
+            pkg_type = raw_type.split("-")[1] if raw_type.startswith("native-") else raw_type if raw_type in ('rpm', 'python', 'ruby', 'unknown', 'library', 'linux-kernel-module') else raw_type.split("-")[0]
+            
             row_data = [
                 component_name,
                 component.get("version", "N/A"),
-                component.get("type", "unknown"),
-                component.get("source_sbom", "unknown"),
+                pkg_type,
+                sbom_file,
                 compat["status"],
-                "Yes" if compat.get("current_version_supported") else "No",
-                compat.get("minimum_supported_version", "N/A"),
-                compat.get("recommended_version", "N/A"),
-                f"{int(compat.get('confidence_level', 0) * 100)}%" if compat.get("confidence_level") is not None else "N/A",
+                # "Yes" if compat.get("current_version_supported") else "No",
+                # compat.get("minimum_supported_version", "N/A"),
+                # compat.get("recommended_version", "N/A"),
+                # f"{int(compat.get('confidence_level', 0) * 100)}%" if compat.get("confidence_level") is not None else "N/A",
                 props.get("detected_os") or props.get("sbom_detected_os") or (analysis_result.detected_os if analysis_result else None) or "N/A",
-                "Yes" if props.get("os_system_package") == "true" else "No",
+                "System" if props.get("os_system_package") == "true" else "Application",
                 compat.get("notes", ""),
                 component.get("matched_name", "")
             ]
@@ -407,6 +428,113 @@ class ExcelReporter(ReportGenerator):
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
     
+    def _create_unique_components_sheet(self, workbook: Workbook, data: Dict[str, Any], analysis_result: AnalysisResult = None):
+        """Create unique components sheet (deduplicated by name+version)."""
+        ws = workbook.create_sheet("Unique Components")
+        
+        # Headers - same as detailed results but without SBOM File column
+        headers = [
+            "Component Name",
+            "Version",
+            "Package Type",
+            "Graviton Support Status",
+            "Detected OS",
+            "OS-Level Package",
+            "Notes",
+            "Matched Name"
+        ]
+        
+        # Check if any components have runtime analysis data
+        has_runtime_analysis = any(
+            comp.get("properties", {}).get("runtime_analysis") == "true" 
+            for comp in data["components"]
+        )
+        
+        if has_runtime_analysis:
+            headers.insert(-2, "Requested Version")
+            headers.insert(-2, "Version Changed")
+        
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = self.header_font
+            cell.fill = self.header_fill
+            cell.alignment = self.center_alignment
+            cell.border = self.border
+        
+        # Deduplicate components by name+version
+        unique_components = {}
+        for component in data["components"]:
+            key = (component.get("name", "unknown"), component.get("version", "N/A"))
+            if key not in unique_components:
+                unique_components[key] = component
+        
+        # Component data
+        for row, component in enumerate(unique_components.values(), 2):
+            compat = component["compatibility"]
+            props = component.get("properties", {})
+            
+            # Ensure component name is never empty
+            component_name = component.get("name") or "unknown"
+            
+            # Clean up package type
+            raw_type = component.get("type", "unknown")
+            pkg_type = raw_type.split("-")[1] if raw_type.startswith("native-") else raw_type if raw_type in ('rpm', 'python', 'ruby', 'unknown', 'library', 'linux-kernel-module') else raw_type.split("-")[0]
+            
+            row_data = [
+                component_name,
+                component.get("version", "N/A"),
+                pkg_type,
+                compat["status"],
+                props.get("detected_os") or props.get("sbom_detected_os") or (analysis_result.detected_os if analysis_result else None) or "N/A",
+                "System" if props.get("os_system_package") == "true" else "Application",
+                compat.get("notes", ""),
+                component.get("matched_name", "")
+            ]
+            
+            # Add runtime analysis columns if present
+            if has_runtime_analysis:
+                row_data.insert(-2, props.get("original_version", "N/A"))
+                row_data.insert(-2, "Yes" if props.get("fallback_used") == "true" else "No")
+            
+            for col, value in enumerate(row_data, 1):
+                cell = ws.cell(row=row, column=col, value=value)
+                cell.border = self.border
+                
+                # Apply status-based formatting
+                if col == 4:  # Status column (shifted left without SBOM File)
+                    if value == "compatible":
+                        cell.fill = self.compatible_fill
+                    elif value == "incompatible":
+                        cell.fill = self.incompatible_fill
+                    elif value == "needs_upgrade":
+                        cell.fill = PatternFill(start_color="FFE4B5", end_color="FFE4B5", fill_type="solid")
+                    elif value == "needs_verification":
+                        cell.fill = self.unknown_fill
+                    elif value == "needs_version_verification":
+                        cell.fill = PatternFill(start_color="E6E6FA", end_color="E6E6FA", fill_type="solid")
+                    elif value == "unknown":
+                        cell.fill = self.unknown_fill
+        
+        # Auto-adjust column widths
+        from openpyxl.utils import get_column_letter
+        max_cols = len(headers)
+        for col_num in range(1, max_cols + 1):
+            max_length = 15
+            column_letter = get_column_letter(col_num)
+            
+            for row_num in range(1, ws.max_row + 1):
+                cell = ws.cell(row=row_num, column=col_num)
+                if hasattr(cell, 'value') and cell.value is not None:
+                    try:
+                        cell_length = len(str(cell.value))
+                        if cell_length > max_length:
+                            max_length = cell_length
+                    except (TypeError, AttributeError):
+                        pass
+            
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+    
     def _create_recommendations_sheet(self, workbook: Workbook, data: Dict[str, Any]):
         """Create recommendations sheet."""
         ws = workbook.create_sheet("Recommendations")
@@ -418,10 +546,19 @@ class ExcelReporter(ReportGenerator):
         
         row = 3
         
-        # Components requiring upgrades
+        # Deduplicate components by name+version
         components = data["components"]
+        unique_components = {}
+        for component in components:
+            key = (component.get("name", "unknown"), component.get("version", "N/A"))
+            if key not in unique_components:
+                unique_components[key] = component
+        
+        unique_list = list(unique_components.values())
+        
+        # Components requiring upgrades
         components_with_upgrades = [
-            c for c in components 
+            c for c in unique_list 
             if c["compatibility"]["status"] in ["incompatible", "needs_upgrade"] 
             and c["compatibility"].get("recommended_version")
         ]
@@ -457,9 +594,9 @@ class ExcelReporter(ReportGenerator):
             row += 1
         
         # Components requiring investigation
-        unknown_components = [c for c in components if c["compatibility"]["status"] == "unknown"]
+        unknown_components = [c for c in unique_list if c["compatibility"]["status"] == "unknown"]
         incompatible_no_upgrade = [
-            c for c in components 
+            c for c in unique_list 
             if c["compatibility"]["status"] == "incompatible" 
             and not c["compatibility"].get("recommended_version")
         ]
@@ -602,37 +739,28 @@ class ExcelReporter(ReportGenerator):
             pie_chart = PieChart()
             pie_chart.title = "Compatibility Status Distribution"
             
-            # Data for pie chart (skip total row, include all status types)
-            data = Reference(worksheet, min_col=2, min_row=11, max_row=16, max_col=2)
-            labels = Reference(worksheet, min_col=1, min_row=11, max_row=16, max_col=1)
+            # Set title to not overlay (appear above chart)
+            if hasattr(pie_chart.title, 'overlay'):
+                pie_chart.title.overlay = False
+            
+            # Data for pie chart - rows 18-23 (skip Total Components at row 17)
+            # Compatible, Incompatible, Needs Upgrade, Needs Verification, Needs Version Verification, Unknown
+            data = Reference(worksheet, min_col=2, min_row=18, max_row=23, max_col=2)
+            labels = Reference(worksheet, min_col=1, min_row=18, max_row=23, max_col=1)
             
             pie_chart.add_data(data, titles_from_data=False)
             pie_chart.set_categories(labels)
-            pie_chart.height = 10
-            pie_chart.width = 15
             
-            # Position chart
-            worksheet.add_chart(pie_chart, "K2")
+            # Set chart size - larger to prevent legend overlap
+            pie_chart.width = 20.81
+            pie_chart.height = 12
             
-            # Bar chart for SBOM breakdown if multiple SBOMs
-            if sbom_count > 1:
-                bar_chart = BarChart()
-                bar_chart.title = "Components by SBOM File"
-                bar_chart.x_axis.title = "SBOM Files"
-                bar_chart.y_axis.title = "Component Count"
-                
-                # Data for bar chart (adjust row numbers based on summary table size)
-                sbom_start_row = 19  # Row where SBOM breakdown table starts
-                data = Reference(worksheet, min_col=4, min_row=sbom_start_row, max_row=sbom_start_row + sbom_count, max_col=9)
-                labels = Reference(worksheet, min_col=1, min_row=sbom_start_row + 1, max_row=sbom_start_row + sbom_count, max_col=1)
-                
-                bar_chart.add_data(data, titles_from_data=True)
-                bar_chart.set_categories(labels)
-                bar_chart.height = 10
-                bar_chart.width = 15
-                
-                # Position chart
-                worksheet.add_chart(bar_chart, "K25")
+            # Set legend to overlay (allows legend inside chart area)
+            if hasattr(pie_chart, 'legend') and pie_chart.legend:
+                pie_chart.legend.overlay = True
+            
+            # Position chart at column K, row 1
+            worksheet.add_chart(pie_chart, "K1")
                 
         except (ImportError, AttributeError, ValueError) as e:
             # Charts are optional, continue without them if there's an issue

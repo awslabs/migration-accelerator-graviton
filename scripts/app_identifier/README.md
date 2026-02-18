@@ -32,6 +32,7 @@ The Graviton Migration Fleet Discovery Solution consists of two main components:
 - **Fleet-Wide Discovery**: Collect software inventory data from hundreds of VMs/servers simultaneously
 - **Multi-Platform Support**: Works on RPM and Debian-based Linux distributions
 - **Multiple Deployment Methods**: SSM, Ansible, or direct SSH execution
+- **Container Discovery**: Automatically detects running containers, inspects their filesystems for OS packages and runtime manifests, and generates per-container SBOMs (requires root)
 
 ## Usage Instructions
 
@@ -100,10 +101,14 @@ graviton-discovery-YYYYMMDD-HHMMSS/
 ├── hostname1-i-1234567890abcdef0-timestamp.sbom.json
 ├── hostname2-i-0987654321fedcba0-timestamp.sbom.json
 ├── hostname3-i-0abcdef1234567890-timestamp.sbom.json
+├── sbom_container_i-1234567890abcdef0_myapp_nginx_latest.json
+├── sbom_container_i-1234567890abcdef0_webapp_node_22-slim.json
 └── ...
 ```
 
-**File naming convention**: `hostname-instanceid-timestamp.sbom.json`
+**File naming convention**:
+- Host SBOMs: `hostname-instanceid-timestamp.sbom.json`
+- Container SBOMs: `sbom_container_<instance-id>_<container-name>_<image-name>.json` (generated when running as root with containers present)
 
 ### B. Using Ansible (Direct Execution)
 
@@ -292,9 +297,10 @@ EOF
     
     mkdir -p "$LOCAL_OUTPUT_DIR"
     scp "${USER}@${instance}:/tmp/*sbom.json" "$LOCAL_OUTPUT_DIR/" 2>/dev/null || echo "No SBOM files found on $instance"
+    scp "${USER}@${instance}:/tmp/sbom_container_*.json" "$LOCAL_OUTPUT_DIR/" 2>/dev/null  # Container SBOMs
     
     # Cleanup remote files
-    ssh -l $USER "$instance" "rm -f /tmp/app_identifier.sh /tmp/*sbom.json"
+    ssh -l $USER "$instance" "rm -f /tmp/app_identifier.sh /tmp/*sbom.json /tmp/sbom_container_*.json"
     
     echo "Completed processing $instance"
 done
@@ -322,12 +328,14 @@ find ./graviton-discovery-YYYYMMDD-HHMMSS -name "*.sbom.json"
 - **Network Access**: VMs/Servers need internet access for package installation and to upload generated SBOM to S3
 - **Data Privacy**: Review collected data before sharing (see data collection section)
 - **Temporary Files**: All temporary files are automatically cleaned up
+- **Container Inspection**: Container filesystem is read directly from the host overlay mount (read-only). No commands are executed inside containers. If not running as root, container filesystem inspection is skipped gracefully
 
 ### Performance Considerations
 - **Execution Time**: 10 seconds to 3 minutes per VMs/Server depending on system size
 - **Memory Usage**: ~50-100MB during execution
 - **Network Usage**: Minimal (only EC2 metadata and S3 operations)
 - **CPU Impact**: Low impact, primarily I/O bound
+- **Container Scanning**: Adds a few seconds per unique container image; reads only package DB files and manifest filenames from the overlay filesystem
 
 ### Operational Considerations
 - **SSM Agent**: Required for SSM deployment method
@@ -354,11 +362,20 @@ find ./graviton-discovery-YYYYMMDD-HHMMSS -name "*.sbom.json"
    - Version information when detectable
    - Excludes system processes and kernel threads
 
+4. **Container Discovery** (when containers are present):
+   - Running container names and image references (added to host SBOM)
+   - Base image detection via OCI labels where available
+   - Per-container SBOMs with OS packages from container filesystem (requires root)
+   - Runtime manifest files discovered inside containers (requirements.txt, package.json, pom.xml, Gemfile, *.csproj, etc.)
+   - Container runtime auto-detected: crictl (EKS/containerd), Docker, Podman, nerdctl
+   - **Non-mutating**: Reads overlay filesystem directly, no exec/cp into containers
+
 ### What Data is NOT Collected
 - **No Sensitive Data**: No passwords, keys, or credentials
-- **No File Contents**: No application data or configuration files
+- **No File Contents**: No application data or configuration files (only manifest filenames and package metadata are read from containers)
 - **No Network Traffic**: No network connections or traffic analysis
 - **No User Data**: No personal or user-specific information
+- **No Container Mutation**: No commands are executed inside running containers
 
 ### Network Connections Made
 - **EC2 Metadata Service**: `http://169.254.169.254/latest/meta-data/` (IMDSv2 preferred)
@@ -412,6 +429,16 @@ jq '.components[] | select(.type == "library") | {name, version, supplier}' "$DA
 
 # Show component summary by type with hostname
 jq '{hostname: .metadata.system.hostname, components: (.components | group_by(.type) | map({type: .[0].type, count: length}))}' "$DATA_DIR"/*.sbom.json
+
+# Show discovered containers in host SBOM
+jq '.components[] | select(.type == "container") | {name, version, properties}' "$DATA_DIR"/*.sbom.json
+
+# Inspect container-specific SBOMs
+for file in "$DATA_DIR"/sbom_container_*.json; do
+    [ -f "$file" ] || continue
+    echo "Container SBOM: $file"
+    jq '{container: .metadata.component.name, image: .metadata.component.version, packages: (.components | length)}' "$file"
+done
 ```
 
 ### Create Package for AWS Team

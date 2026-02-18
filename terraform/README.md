@@ -31,24 +31,45 @@ S3 Upload → EventBridge → Lambda → AWS Batch → EC2 (Graviton3) → S3 Re
 
 ## Quick Start
 
-### 1. Configure Variables
+### Option 1: Automated Deployment (Recommended)
 
 ```bash
+# Deploy with auto-managed state bucket
+../deploy.sh
+
+# Or use existing state bucket
+../deploy.sh deploy --state-bucket my-existing-bucket
+```
+
+The deploy script automatically:
+- Creates/manages Terraform state bucket
+- Deploys infrastructure
+- Enables S3 EventBridge notifications
+- Verifies deployment
+
+### Option 2: Manual Terraform Deployment
+
+**IMPORTANT**: You must provide a state bucket for remote state storage.
+
+```bash
+# 1. Create state bucket (one-time setup)
+aws s3 mb s3://my-terraform-state-bucket-$(date +%s)
+aws s3api put-bucket-versioning --bucket my-terraform-state-bucket-$(date +%s) --versioning-configuration Status=Enabled
+
+# 2. Configure variables
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your settings
-```
 
-### 2. Deploy Infrastructure
+# 3. Initialize with state bucket
+terraform init \
+  -backend-config="bucket=my-terraform-state-bucket-$(date +%s)" \
+  -backend-config="region=us-east-1"
 
-```bash
-terraform init
+# 4. Deploy
 terraform plan -out=tfplan
 terraform apply tfplan
-```
 
-### 3. Enable S3 EventBridge (REQUIRED)
-
-```bash
+# 5. Enable S3 EventBridge (REQUIRED)
 BUCKET=$(terraform output -raw s3_bucket_name)
 aws s3api put-bucket-notification-configuration \
   --bucket $BUCKET \
@@ -68,7 +89,7 @@ aws s3 cp my-app.sbom.json s3://$BUCKET/input/individual/
 1. EventBridge detects upload
 2. Lambda submits Batch job
 3. Batch launches EC2 instance
-4. Analysis runs with `--runtime --test --containers`
+4. Analysis runs with container testing (--yes for non-interactive mode)
 5. Results uploaded to `output/individual/my-app/`
 6. EC2 terminates automatically
 
@@ -296,6 +317,18 @@ aws batch list-jobs --job-queue $QUEUE --filters name=JOB_NAME,values=batch-my-p
 
 ## Cleanup
 
+### Option 1: Using Deploy Script
+
+```bash
+# Destroy infrastructure but keep state bucket
+../deploy.sh destroy
+
+# Destroy infrastructure AND delete state bucket
+../deploy.sh destroy --delete-state
+```
+
+### Option 2: Manual Cleanup
+
 ```bash
 # Delete all S3 objects first
 BUCKET=$(terraform output -raw s3_bucket_name)
@@ -303,6 +336,10 @@ aws s3 rm s3://$BUCKET --recursive
 
 # Destroy infrastructure
 terraform destroy
+
+# Optionally delete state bucket (manual)
+aws s3 rm s3://my-terraform-state-bucket --recursive
+aws s3 rb s3://my-terraform-state-bucket
 ```
 
 ## Technical Notes

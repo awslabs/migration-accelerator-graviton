@@ -14,6 +14,11 @@ terraform {
       version = "~> 2.2"
     }
   }
+
+  backend "s3" {
+    key = "migration-accelerator-graviton/terraform.tfstate"
+    # bucket and region will be provided via -backend-config during terraform init
+  }
 }
 
 provider "aws" {

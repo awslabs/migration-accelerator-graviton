@@ -23,9 +23,9 @@ python graviton_validator.py [OPTIONS] [SBOM_FILES...]
 **Minimum Required**: One of the following
 - SBOM file(s) as positional arguments
 - `--directory` for batch processing
-- `--merge` for combining reports
-- `--sbom-only` for manifest generation
-- `--runtime-only` for runtime analysis
+- `--merge-reports` for combining reports
+- `--extract-manifests` for manifest generation
+- `--test-manifests` for runtime analysis
 
 ## Input Options
 
@@ -60,14 +60,14 @@ python graviton_validator.py app1.sbom.json app2.sbom.json app3.sbom.json
 python graviton_validator.py -d ./sbom-files/
 
 # With runtime testing
-python graviton_validator.py -d ./sbom-files/ --runtime --test --containers
+python graviton_validator.py -d ./sbom-files/ --yes
 ```
 
 **Behavior**:
 - Recursively finds all `.json` files
 - Processes each file independently
 - Generates separate json reports for each
-- Can combine with `--merge` for unified final report
+- Can combine with `--merge-reports` for unified final report
 
 ## Execution Modes
 
@@ -77,33 +77,55 @@ python graviton_validator.py -d ./sbom-files/ --runtime --test --containers
 python graviton_validator.py sbom.json
 ```
 
-**What it does**:
+**Default behavior**:
 - Parses SBOM file
 - Matches components against knowledge base
 - Checks deny lists
-- Generates compatibility report
+- **Tests package installation in containers** (if Docker/Podman available)
+- If Docker not available: prompts user to continue with static analysis or exit
+- Use `--yes` to bypass prompts (for CI/CD)
+- Use `--static-only` to skip installation testing (fast)
 
 **Does NOT**:
 - Install any packages
 - Check package registries
 - Require network access
 
-### Runtime Analysis Mode
+### Analysis Modes
 
-#### `--runtime`
+By default, the tool runs comprehensive analysis with container testing (if Docker/Podman is available).
+If Docker is not available, it prompts the user to continue with static analysis or exit.
+
+#### `--static-only`
 **Type**: Flag  
 **Default**: False  
-**Description**: Enable runtime analysis (checks package availability)
+**Description**: Skip package installation testing. Only use knowledge base analysis (fast).
 
 ```bash
-python graviton_validator.py sbom.json --runtime
+python graviton_validator.py sbom.json --static-only
 ```
 
 **What it does**:
-- Extracts dependency manifests from SBOM
-- Checks package registry availability (network access required)
-- Detects native code dependencies
-- **Does NOT install packages** (read-only checks)
+- Analyzes SBOM against knowledge base only
+- Enriches unknown OS/system packages via ARM Ecosystem Dashboard (requires Docker/Podman for MCP server; skipped if unavailable)
+- Checks container image ARM64 support via Docker Registry API
+- No package installation or registry checks for language dependencies
+- Fast and safe
+
+#### `--test-local`
+**Type**: Flag  
+**Default**: False  
+**Description**: Test packages on local system instead of in containers.
+
+```bash
+python graviton_validator.py sbom.json --test-local
+```
+
+**⚠️ WARNING**: Installs packages on your local machine
+- Runs `pip install`, `npm install`, `mvn`, `dotnet restore`, `bundle install`
+- May execute package setup scripts
+- Can modify Python/Node.js/Ruby environments
+- **Use default container testing instead for safety**
 
 **Supported Runtimes**:
 - Python (pip)
@@ -112,39 +134,22 @@ python graviton_validator.py sbom.json --runtime
 - .NET (NuGet)
 - Ruby (bundler)
 
-### Runtime Testing Mode
-
-#### `--test`
+#### `-y, --yes`
 **Type**: Flag  
 **Default**: False  
-**Requires**: `--runtime`  
-**Description**: Actually install packages to verify compatibility
+**Description**: Non-interactive mode. Bypass all prompts and use defaults.
 
 ```bash
-python graviton_validator.py sbom.json --runtime --test
+python graviton_validator.py sbom.json --yes -f excel -o report.xlsx
 ```
 
-**⚠️ WARNING**: Installs packages on your local machine
-- Runs `pip install`, `npm install`, `mvn`, `dotnet restore`, `bundle install`
-- May execute package setup scripts
-- Can modify Python/Node.js/Ruby environments
-- **Use `--containers` for safety**
+**✅ RECOMMENDED** for CI/CD pipelines
 
-### Containerized Testing Mode
+**Behavior**:
+- If Docker available: runs container testing without prompting
+- If Docker not available: falls back to static analysis without prompting
 
-#### `--containers`
-**Type**: Flag  
-**Default**: False  
-**Requires**: `--runtime --test`  
-**Description**: Run tests in isolated Docker containers
-
-```bash
-python graviton_validator.py sbom.json --runtime --test --containers
-```
-
-**✅ RECOMMENDED** for production use
-
-**Requirements**:
+**Requirements for container testing**:
 - Docker or Podman installed
 - Docker daemon running
 - Sufficient disk space
@@ -157,13 +162,13 @@ python graviton_validator.py sbom.json --runtime --test --containers
 
 ### Multi-Stage Build Modes
 
-#### `--sbom-only`
+#### `--extract-manifests`
 **Type**: Flag  
 **Default**: False  
 **Description**: Generate dependency manifests only (Stage 1)
 
 ```bash
-python graviton_validator.py --sbom-only -d ./sboms/
+python graviton_validator.py --extract-manifests -d ./sboms/
 ```
 
 **Output**: Manifests saved to `output_files/`
@@ -175,7 +180,7 @@ python graviton_validator.py --sbom-only -d ./sboms/
 
 **Use Case**: Parallel runtime testing on different machines
 
-#### `--runtime-only [RUNTIME]`
+#### `--test-manifests [RUNTIME]`
 **Type**: Choice  
 **Choices**: `auto`, `python`, `nodejs`, `java`, `dotnet`, `ruby`  
 **Default**: `auto` (if flag used without value)  
@@ -183,13 +188,13 @@ python graviton_validator.py --sbom-only -d ./sboms/
 
 ```bash
 # Auto-detect runtimes
-python graviton_validator.py --runtime-only auto
+python graviton_validator.py --test-manifests auto
 
 # Specific runtime
-python graviton_validator.py --runtime-only python --test --containers
+python graviton_validator.py --test-manifests python --yes
 
 # With custom input file
-python graviton_validator.py --runtime-only python --input-file requirements.txt --test
+python graviton_validator.py --test-manifests python --input-file requirements.txt --test
 ```
 
 **Behavior**:
@@ -200,40 +205,40 @@ python graviton_validator.py --runtime-only python --input-file requirements.txt
 #### `--input-file FILE`
 **Type**: File path  
 **Default**: None  
-**Requires**: `--runtime-only`  
+**Requires**: `--test-manifests`  
 **Description**: Specific manifest file to analyze
 
 ```bash
 # Analyze specific manifest
-python graviton_validator.py --runtime-only python --input-file requirements.txt --test --containers
+python graviton_validator.py --test-manifests python --input-file requirements.txt --yes
 
 # Java POM file
-python graviton_validator.py --runtime-only java --input-file pom.xml --test --containers
+python graviton_validator.py --test-manifests java --input-file pom.xml --yes
 ```
 
 #### `--input-dir DIR`
 **Type**: Directory path  
 **Default**: `output_files`  
-**Requires**: `--runtime-only`  
-**Description**: Directory containing manifests from `--sbom-only`
+**Requires**: `--test-manifests`  
+**Description**: Directory containing manifests from `--extract-manifests`
 
 ```bash
-python graviton_validator.py --runtime-only auto --input-dir ./manifests/ --test --containers
+python graviton_validator.py --test-manifests auto --input-dir ./manifests/ --yes
 ```
 
 ### Report Merging Modes
 
-#### `--merge [FILES...]`
+#### `--merge-reports [FILES...]`
 **Type**: File path(s)  
 **Default**: None  
 **Description**: Merge multiple JSON analysis reports
 
 ```bash
 # Merge specific reports
-python graviton_validator.py --merge report1.json report2.json report3.json -f excel
+python graviton_validator.py --merge-reports report1.json report2.json report3.json -f excel
 
 # Merge all reports in directory
-python graviton_validator.py --merge ./results/*.json -f excel -o combined.xlsx
+python graviton_validator.py --merge-reports ./results/*.json -f excel -o combined.xlsx
 ```
 
 **Behavior**:
@@ -242,17 +247,17 @@ python graviton_validator.py --merge ./results/*.json -f excel -o combined.xlsx
 - Aggregates statistics
 - Generates unified report
 
-#### `--merge-runtime [DIR]`
+#### `--merge-results [DIR]`
 **Type**: Directory path  
 **Default**: `output_files` (if flag used without value)  
 **Description**: Merge SBOM and runtime analysis results (Stage 3)
 
 ```bash
 # Use default directory
-python graviton_validator.py --merge-runtime
+python graviton_validator.py --merge-results
 
 # Specify directory
-python graviton_validator.py --merge-runtime ./analysis-results/ -f excel
+python graviton_validator.py --merge-results ./analysis-results/ -f excel
 ```
 
 **Behavior**:
@@ -379,19 +384,19 @@ python graviton_validator.py sbom.json --output-dir ./results/
 
 **Contains**:
 - Analysis reports
-- Extracted manifests (if `--sbom-only`)
-- Runtime results (if `--runtime`)
+- Extracted manifests (if `--extract-manifests`)
+- Runtime results (if `--test-local`)
 - Logs (if `--log-file` without path)
 
 ### Detailed Output
 
-#### `--detailed`
+#### `--verbose-output`
 **Type**: Flag  
 **Default**: False  
 **Description**: Include detailed component information in text reports
 
 ```bash
-python graviton_validator.py sbom.json --detailed
+python graviton_validator.py sbom.json --verbose-output
 ```
 
 **Adds**:
@@ -458,6 +463,47 @@ python graviton_validator.py sbom.json --config custom_config.yaml
 3. Default config file
 4. Built-in defaults (lowest)
 
+## OS Knowledge Base Auto-Update
+
+### Disable Auto-Update
+
+#### `--disable-os-kb-update`
+**Type**: Flag  
+**Default**: False (auto-update enabled)  
+**Description**: Disable automatic OS knowledge base updates
+
+```bash
+python graviton_validator.py sbom.json --disable-os-kb-update
+```
+
+**When to use**:
+- Offline environments
+- CI/CD pipelines with pre-cached KBs
+- Testing with specific KB versions
+
+### Update Threshold
+
+#### `--os-kb-max-age-days DAYS`
+**Type**: Integer  
+**Default**: 7  
+**Description**: Maximum age in days before OS KB is updated
+
+```bash
+# Update if older than 14 days
+python graviton_validator.py sbom.json --os-kb-max-age-days 14
+
+# Update daily
+python graviton_validator.py sbom.json --os-kb-max-age-days 1
+```
+
+**How it works**:
+- Detects OS from SBOM
+- Checks last update timestamp
+- Updates if older than threshold
+- Only updates OS versions in SBOM
+
+See [OS KB Auto-Update Guide](OS_KB_AUTO_UPDATE.md) for details.
+
 ## Logging & Debugging
 
 ### Verbosity
@@ -477,13 +523,13 @@ python graviton_validator.py sbom.json -v
 - Package installation status
 - Detailed error messages
 
-#### `--debug`
+#### `-vv`
 **Type**: Flag  
 **Default**: False  
 **Description**: Enable DEBUG level logging
 
 ```bash
-python graviton_validator.py sbom.json --debug
+python graviton_validator.py sbom.json -vv
 ```
 
 **Shows**:
@@ -534,7 +580,7 @@ python graviton_validator.py sbom.json --log-level DEBUG
 python graviton_validator.py sbom.json --log-file analysis.log
 
 # With debug level
-python graviton_validator.py sbom.json --debug --log-file debug.log
+python graviton_validator.py sbom.json -vv --log-file debug.log
 ```
 
 **Behavior**:
@@ -552,7 +598,7 @@ python graviton_validator.py sbom.json --debug --log-file debug.log
 **Description**: Runtime configuration file (YAML/JSON)
 
 ```bash
-python graviton_validator.py sbom.json --runtime --runtime-config custom_runtime.yaml
+python graviton_validator.py sbom.json --runtime-config custom_runtime.yaml
 ```
 
 **Use Case**: Override runtime versions, timeouts, container settings
@@ -565,7 +611,7 @@ python graviton_validator.py sbom.json --runtime --runtime-config custom_runtime
 **Description**: Keep temporary files for debugging
 
 ```bash
-python graviton_validator.py sbom.json --runtime --test --no-cleanup
+python graviton_validator.py sbom.json --test-local --no-cleanup
 ```
 
 **Keeps**:
@@ -599,64 +645,64 @@ fi
 
 ### Quick Analysis
 ```bash
-# Fastest - knowledge base only
-python graviton_validator.py app.sbom.json
+# Fastest - knowledge base only (no installation testing)
+python graviton_validator.py app.sbom.json --static-only
 ```
 
 ### Comprehensive Analysis
 ```bash
-# Recommended - full testing in containers
-python graviton_validator.py app.sbom.json --runtime --test --containers -f excel
+# Default behavior - tests packages in containers (recommended)
+python graviton_validator.py app.sbom.json -f excel
 ```
 
 ### CI/CD Pipeline
 ```bash
-# Quiet mode with JSON output
-python graviton_validator.py app.sbom.json --runtime --test --containers -f json --quiet
+# Non-interactive mode with JSON output
+python graviton_validator.py app.sbom.json --yes -f json -q
 ```
 
 ### Enterprise Portfolio
 ```bash
 # Batch analysis with Excel reports
-python graviton_validator.py -d ./enterprise-sboms/ --runtime --test --containers -f excel --output-dir ./reports/
+python graviton_validator.py -d ./enterprise-sboms/ --yes -f excel --output-dir ./reports/
 ```
 
 ### Multi-Stage Build
 ```bash
 # Stage 1: Generate manifests
-python graviton_validator.py --sbom-only -d ./sboms/
+python graviton_validator.py --extract-manifests -d ./sboms/
 
 # Stage 2: Test runtimes (can run in parallel)
-python graviton_validator.py --runtime-only python --test --containers
-python graviton_validator.py --runtime-only nodejs --test --containers
-python graviton_validator.py --runtime-only java --test --containers
+python graviton_validator.py --test-manifests python --yes
+python graviton_validator.py --test-manifests nodejs --yes
+python graviton_validator.py --test-manifests java --yes
 
 # Stage 3: Merge results
-python graviton_validator.py --merge-runtime -f excel -o final-report.xlsx
+python graviton_validator.py --merge-results -f excel -o final-report.xlsx
 ```
 
 ### Debugging Failed Analysis
 ```bash
 # Maximum verbosity with log file
-python graviton_validator.py app.sbom.json --debug -v --log-file debug.log --no-cleanup
+python graviton_validator.py app.sbom.json -vv --log-file debug.log --no-cleanup
 ```
 
 ### Custom Knowledge Base
 ```bash
 # Organization-specific compatibility data
-python graviton_validator.py app.sbom.json -k company_kb.json -k team_kb.json --runtime --test
+python graviton_validator.py app.sbom.json -k company_kb.json -k team_kb.json --test-local
 ```
 
 ## Common Option Combinations
 
 ### Safe Production Testing
 ```bash
---runtime --test --containers
+--yes
 ```
 
 ### Detailed Reporting
 ```bash
--f excel --detailed -o detailed-report.xlsx
+-f excel --verbose-output -o detailed-report.xlsx
 ```
 
 ### Silent Automation
@@ -666,24 +712,26 @@ python graviton_validator.py app.sbom.json -k company_kb.json -k team_kb.json --
 
 ### Debug Mode
 ```bash
---debug -v --log-file debug.log --no-cleanup
+-vv --log-file debug.log --no-cleanup
 ```
 
 ### Batch Processing
 ```bash
--d ./sboms/ --runtime --test --containers --output-dir ./results/
+-d ./sboms/ --yes --output-dir ./results/
 ```
 
 ## Tips & Best Practices
 
-1. **Always use `--containers` with `--test`** for safety
-2. **Use `-f excel` for stakeholder reports** - easier to read
-3. **Use `-f json` for automation** - machine-readable
-4. **Enable `--verbose` when troubleshooting** - see what's happening
-5. **Use `--sbom-only` for large portfolios** - parallel processing
-6. **Keep logs with `--log-file`** - helpful for debugging
-7. **Use `--detailed` for deep dives** - complete information
-8. **Combine `--merge` with `-f excel`** - unified portfolio view
+1. **Container testing is the default** - Docker/Podman is used automatically for safe testing
+2. **Use `--yes` in CI/CD pipelines** - bypasses interactive prompts
+3. **Use `--static-only` for quick checks** - fast knowledge base analysis without installation
+4. **Use `-f excel` for stakeholder reports** - easier to read
+5. **Use `-f json` for automation** - machine-readable
+6. **Enable `-v` when troubleshooting** - see what's happening, use `-vv` for debug
+7. **Use `--extract-manifests` for large portfolios** - parallel processing
+8. **Keep logs with `--log-file`** - helpful for debugging
+9. **Use `--verbose-output` for deep dives** - complete information
+10. **Combine `--merge-reports` with `-f excel`** - unified portfolio view
 
 ## Runtime Testing Guide
 
@@ -701,9 +749,9 @@ Runtime testing verifies actual package installation and ARM64 compatibility for
 | Mode | Command | Speed | Accuracy | Safety | Use Case |
 |------|---------|-------|----------|--------|----------|
 | Standard | `sbom.json` | Fast | Medium | Safe | Quick check, CI/CD |
-| Runtime | `--runtime` | Medium | High | Safe | Verify availability |
-| Testing | `--runtime --test` | Slow | Highest | ⚠️ Unsafe | Full verification |
-| Containers | `--runtime --test --containers` | Slow | Highest | ✅ Safe | Production testing |
+| Runtime | `--test-local` | Medium | High | Safe | Verify availability |
+| Testing | `--test-local` | Slow | Highest | ⚠️ Unsafe | Full verification |
+| Containers | `--yes` | Slow | Highest | ✅ Safe | Production testing |
 
 ### Multi-Stage Workflow
 
@@ -711,7 +759,7 @@ For large portfolios (100+ applications), use multi-stage builds:
 
 **Stage 1: Generate Manifests**
 ```bash
-python graviton_validator.py --sbom-only -d ./sboms/
+python graviton_validator.py --extract-manifests -d ./sboms/
 ```
 Output: Manifests saved to `output_files/`
 - `<name>_requirements.txt` (Python)
@@ -723,16 +771,16 @@ Output: Manifests saved to `output_files/`
 **Stage 2: Test Runtimes (Parallel)**
 ```bash
 # Run on different machines/containers
-python graviton_validator.py --runtime-only python --test --containers
-python graviton_validator.py --runtime-only nodejs --test --containers
-python graviton_validator.py --runtime-only java --test --containers
-python graviton_validator.py --runtime-only dotnet --test --containers
-python graviton_validator.py --runtime-only ruby --test --containers
+python graviton_validator.py --test-manifests python --yes
+python graviton_validator.py --test-manifests nodejs --yes
+python graviton_validator.py --test-manifests java --yes
+python graviton_validator.py --test-manifests dotnet --yes
+python graviton_validator.py --test-manifests ruby --yes
 ```
 
 **Stage 3: Merge Results**
 ```bash
-python graviton_validator.py --merge-runtime ./output_files/ -f excel -o final-report.xlsx
+python graviton_validator.py --merge-results ./output_files/ -f excel -o final-report.xlsx
 ```
 
 ### Configuration
@@ -823,19 +871,19 @@ ruby:
 grep offline_mode ~/.graviton_validator/config.yaml
 
 # Test with verbose logging
-python graviton_validator.py sbom.json --runtime -v
+python graviton_validator.py sbom.json -vv
 ```
 
 **Package Installation Failures**:
 ```bash
 # Use containers for isolation
-python graviton_validator.py sbom.json --runtime --test --containers
+python graviton_validator.py sbom.json --yes
 
 # Keep temp files for debugging
-python graviton_validator.py sbom.json --runtime --test --no-cleanup
+python graviton_validator.py sbom.json --test-local --no-cleanup
 
 # Check logs
-python graviton_validator.py sbom.json --runtime --test --log-file debug.log
+python graviton_validator.py sbom.json --test-local --log-file debug.log
 ```
 
 **API Rate Limiting**:

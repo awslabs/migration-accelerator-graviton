@@ -41,7 +41,7 @@ The tool uses two types of knowledge bases for different analysis phases:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ Runtime Analysis Flow (--runtime --test)                │
+│ Runtime Analysis Flow (--test-local)                │
 ├─────────────────────────────────────────────────────────┤
 │                                                          │
 │  Phase 1: Check Runtime KB (10-15 common packages)      │
@@ -82,8 +82,9 @@ The tool uses two types of knowledge bases for different analysis phases:
 
 | Analysis Type | Knowledge Base Used | Purpose |
 |--------------|---------------------|---------|
-| SBOM Analysis (default) | `knowledge_bases/` | Static component compatibility |
-| Runtime Testing (`--runtime --test`) | Both types | Fast-path + API queries |
+| Default (container testing) | Both types | KB analysis + package installation testing |
+| Static Only (`--static-only`) | `knowledge_bases/` | Static component compatibility only |
+| Local Testing (`--test-local`) | Both types | KB analysis + local package installation |
 | Offline Mode | Both types | No API calls, KB only |
 
 ## Knowledge Base Structure

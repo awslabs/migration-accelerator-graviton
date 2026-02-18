@@ -53,21 +53,25 @@ class SyftParser(SBOMParser):
         """
         components = []
         
+        # Detect OS once for all components
+        detected_os = self.get_detected_os(sbom_data)
+        
         # Parse artifacts from the artifacts array
         for artifact_data in sbom_data.get("artifacts", []):
-            component = self._parse_single_artifact(artifact_data, source_file)
+            component = self._parse_single_artifact(artifact_data, source_file, detected_os)
             if component:
                 components.append(component)
         
         return components
     
-    def _parse_single_artifact(self, artifact_data: dict, source_file: str) -> Optional[SoftwareComponent]:
+    def _parse_single_artifact(self, artifact_data: dict, source_file: str, detected_os: Optional[str] = None) -> Optional[SoftwareComponent]:
         """
         Parse a single artifact from Syft data.
         
         Args:
             artifact_data: Artifact data from SBOM
             source_file: Path to the source SBOM file
+            detected_os: Detected operating system name
             
         Returns:
             SoftwareComponent object or None if parsing fails
@@ -145,17 +149,86 @@ class SyftParser(SBOMParser):
                 if cpe_values:
                     properties["cpes"] = ",".join(cpe_values[:2])  # Limit to first 2 CPEs
             
-            return SoftwareComponent(
+            component = SoftwareComponent(
                 name=name,
                 version=version,
                 component_type=component_type,
                 source_sbom=source_file,
                 properties=properties
             )
+            
+            # Enhance component with OS-specific information
+            if detected_os:
+                component = self._enhance_component_with_os_info(component, artifact_data, detected_os)
+            
+            return component
         
         except Exception:
             # Skip artifacts that can't be parsed
             return None
+    
+    def _enhance_component_with_os_info(self, component: SoftwareComponent, artifact_data: dict, detected_os: Optional[str]) -> SoftwareComponent:
+        """
+        Enhance component with OS-specific information.
+        
+        Args:
+            component: Base SoftwareComponent
+            artifact_data: Original artifact data from SBOM
+            detected_os: Detected OS name
+            
+        Returns:
+            Enhanced SoftwareComponent
+        """
+        if not detected_os:
+            return component
+        
+        # Add OS information to properties
+        component.properties["detected_os"] = detected_os
+        
+        # Check if this is a system package for the detected OS
+        os_patterns = self.os_config_manager.get_detection_patterns(detected_os)
+        
+        # Check version patterns
+        if component.version:
+            for pattern in os_patterns.get("package_patterns", []):
+                if pattern.lower() in component.version.lower():
+                    component.properties["os_system_package"] = "true"
+                    component.properties["system_package_os"] = detected_os
+                    break
+        
+        # Check PURL for OS-specific information
+        purl = component.properties.get("purl", "")
+        if purl:
+            purl_detected_os = self.os_config_manager.detect_os_from_purl(purl)
+            if purl_detected_os == detected_os:
+                component.properties["os_system_package"] = "true"
+                component.properties["system_package_os"] = detected_os
+                component.properties["system_package_source"] = "purl"
+        
+        # Check component type against OS package types
+        os_info = self.os_config_manager.get_os_info(detected_os)
+        if os_info and component.component_type in os_info.get("package_types", []):
+            component.properties["os_system_package"] = "true"
+            component.properties["system_package_os"] = detected_os
+            component.properties["system_package_source"] = "component_type"
+        
+        # Check vendor patterns (Syft uses metadata.vendor)
+        metadata = artifact_data.get("metadata", {})
+        vendor = metadata.get("vendor", "") if isinstance(metadata, dict) else ""
+        
+        if vendor:
+            for vendor_pattern in os_patterns.get("vendor_names", []):
+                if vendor_pattern.lower() in vendor.lower():
+                    component.properties["os_system_package"] = "true"
+                    component.properties["system_package_os"] = detected_os
+                    component.properties["system_package_vendor"] = vendor
+                    break
+        
+        # Add OS compatibility information
+        is_compatible = self.os_config_manager.is_os_graviton_compatible(detected_os)
+        component.properties["os_graviton_compatible"] = str(is_compatible).lower()
+        
+        return component
     
     def get_detected_os(self, sbom_data: dict) -> Optional[str]:
         """

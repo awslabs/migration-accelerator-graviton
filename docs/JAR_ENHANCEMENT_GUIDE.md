@@ -21,7 +21,7 @@ python graviton_validator.py sbom.json --jars app.jar lib1.jar lib2.jar
 python graviton_validator.py sbom.json --jar-dir ./libs/
 
 # With runtime testing
-python graviton_validator.py sbom.json --jars ./target/*.jar --runtime --test --containers
+python graviton_validator.py sbom.json --jars ./target/*.jar --yes
 ```
 
 ## Command Line Options
@@ -94,7 +94,7 @@ The tool:
 Components found in JARs are checked against:
 - Knowledge base
 - Deny lists
-- Runtime testing (if `--runtime` enabled)
+- Runtime testing (if `--test-local` enabled)
 
 ### Step 3: Report Generation
 Results include:
@@ -111,7 +111,7 @@ Results include:
 # Analyze Spring Boot JAR with embedded dependencies
 python graviton_validator.py spring-app.sbom.json \
   --jars ./target/spring-app-1.0.0.jar \
-  --runtime --test --containers \
+  --yes \
   -f excel -o spring-compatibility.xlsx
 ```
 
@@ -121,7 +121,7 @@ python graviton_validator.py spring-app.sbom.json \
 # Analyze all modules
 python graviton_validator.py project.sbom.json \
   --jar-dir ./target/ \
-  --runtime --test --containers \
+  --yes \
   -f excel
 ```
 
@@ -131,7 +131,7 @@ python graviton_validator.py project.sbom.json \
 # Analyze web application
 python graviton_validator.py webapp.sbom.json \
   --jars ./target/webapp.war \
-  --runtime --test --containers
+  --yes
 ```
 
 ### Example 4: Enterprise Application (EAR)
@@ -141,7 +141,7 @@ python graviton_validator.py webapp.sbom.json \
 python graviton_validator.py enterprise-app.sbom.json \
   --jars ./target/app.ear \
   --jar-dir ./lib/ \
-  --runtime --test --containers \
+  --yes \
   -f excel -o enterprise-report.xlsx
 ```
 
@@ -173,7 +173,7 @@ JAR analysis flags components with:
 # SBOM + JAR + Runtime testing
 python graviton_validator.py app.sbom.json \
   --jars ./target/*.jar \
-  --runtime --test --containers \
+  --yes \
   -f excel -o complete-analysis.xlsx
 ```
 
@@ -188,7 +188,7 @@ This provides:
 ### 1. Always Include JARs for Java Applications
 ```bash
 # Good: Complete analysis
-python graviton_validator.py java-app.sbom.json --jars ./target/*.jar --runtime --test --containers
+python graviton_validator.py java-app.sbom.json --jars ./target/*.jar --yes
 
 # Limited: SBOM only (may miss embedded dependencies)
 python graviton_validator.py java-app.sbom.json
@@ -197,7 +197,7 @@ python graviton_validator.py java-app.sbom.json
 ### 2. Use Runtime Testing with JARs
 ```bash
 # Verify both SBOM and JAR findings
-python graviton_validator.py app.sbom.json --jars app.jar --runtime --test --containers
+python graviton_validator.py app.sbom.json --jars app.jar --yes
 ```
 
 ### 3. Analyze All Application JARs
@@ -249,7 +249,7 @@ python graviton_validator.py sbom.json --jars large-app.jar --no-cleanup
 ### What JAR Analysis Cannot Do
 
 1. **Cannot execute code**: Only inspects JAR contents
-2. **Cannot test runtime behavior**: Use `--runtime --test` for that
+2. **Cannot test runtime behavior**: Use `--test-local` for that
 3. **Cannot detect all native code**: Some JNI usage may not be visible
 4. **Cannot analyze obfuscated JARs**: Requires readable MANIFEST.MF
 
@@ -261,7 +261,7 @@ For complete coverage:
 python graviton_validator.py app.sbom.json \
   --jars ./target/*.jar \
   --jar-dir ./libs/ \
-  --runtime --test --containers \
+  --yes \
   -k custom-java-kb.json \
   -f excel -o comprehensive-report.xlsx
 ```

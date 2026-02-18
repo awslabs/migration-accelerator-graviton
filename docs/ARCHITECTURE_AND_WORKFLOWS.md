@@ -35,7 +35,7 @@ Multi-stage SBOM compatibility analyzer for AWS Graviton (ARM64) migration asses
 
 The diagram above shows the internal architecture with three main layers:
 1. **Input Layer**: SBOM parsing and component extraction
-2. **Analysis Layer**: Knowledge base matching and runtime testing
+2. **Analysis Layer**: Knowledge base matching, runtime testing, ARM ecosystem enrichment (via MCP), and container image ARM64 validation
 3. **Reporting Layer**: Multi-format report generation
 
 ### Core Modules
@@ -49,6 +49,9 @@ The diagram above shows the internal architecture with three main layers:
 - `knowledge_base/` - KB loading and matching (SBOM analysis)
 - `knowledge_base/runtime_loader.py` - Runtime KB fast-path (10-15 common packages per runtime)
 - `filtering/` - System package detection
+- `analysis/arm_ecosystem_enrichment.py` - ARM Ecosystem Dashboard lookup via MCP for unknown OS/system packages
+- `analysis/arm_mcp_client.py` - MCP client for ARM MCP server communication (JSON-RPC over stdio)
+- `analysis/container_arch_checker.py` - Container image ARM64 architecture check via Docker Registry API
 
 **Runtime Testing**:
 - `analysis/python_runtime_analyzer.py` - Python: Runtime KB → PyPI API → Cache
@@ -65,7 +68,7 @@ The diagram above shows the internal architecture with three main layers:
 
 ## Execution Modes
 
-### Mode 1: Standard Analysis (Default)
+### Mode 1: Default Analysis (Container Testing)
 ```bash
 python graviton_validator.py sbom.json
 ```
@@ -74,71 +77,73 @@ python graviton_validator.py sbom.json
 - Parses SBOM file
 - Matches components against knowledge base
 - Checks deny lists
+- **Tests package installation in containers** (if Docker/Podman available)
+- **Enriches unknown OS/system packages** via ARM Ecosystem Dashboard (MCP)
+- **Checks container image ARM64 support** via Docker Registry API
+- If Docker not available: prompts user to continue with static analysis or exit
+
+**Requires**: Docker or Podman (recommended)
+
+**Use case**: Comprehensive analysis, production-safe testing
+
+---
+
+### Mode 2: Static Analysis Only
+```bash
+python graviton_validator.py sbom.json --static-only
+```
+
+**What it does**:
+- Parses SBOM file
+- Matches components against knowledge base
+- Checks deny lists
+- Enriches unknown OS/system packages via ARM Ecosystem Dashboard (MCP, requires Docker/Podman)
+- Checks container image ARM64 support via Docker Registry API
 - Generates compatibility report
 
 **Does NOT**:
 - Install any packages
-- Check package registries
-- Require network access
+- Check package registries for language dependencies
+- Require Docker for core analysis (ARM MCP enrichment skipped gracefully if unavailable)
 
-**Use case**: Quick compatibility check, CI/CD pipelines
+**Use case**: Quick compatibility check, offline environments
 
 ---
 
-### Mode 2: Runtime Analysis
+### Mode 3: Local Testing
 ```bash
-python graviton_validator.py sbom.json --runtime
+python graviton_validator.py sbom.json --test-local
 ```
 
 **What it does**:
 - Standard analysis PLUS
-- Extracts dependency manifests from SBOM
-- Queries package registries (PyPI, NPM, Maven, NuGet, RubyGems)
-- Checks for ARM64-specific packages
-- **Does NOT install packages** (read-only checks)
-
-**Requires**: Network access
-
-**Use case**: Verify package availability before migration
-
----
-
-### Mode 3: Runtime Testing
-```bash
-python graviton_validator.py sbom.json --runtime --test
-```
-
-**What it does**:
-- Runtime analysis PLUS
-- **Actually installs packages** locally
+- **Actually installs packages** on local system
 - Tests import/require functionality
 - Detects native code compilation issues
 
 **⚠️ WARNING**: Modifies local environment
 
-**Use case**: Full verification (use with --containers)
+**Use case**: Development and debugging
 
 ---
 
-### Mode 4: Containerized Testing (Recommended)
+### Mode 4: Non-Interactive (CI/CD)
 ```bash
-python graviton_validator.py sbom.json --runtime --test --containers
+python graviton_validator.py sbom.json --yes
 ```
 
 **What it does**:
-- Runtime testing in isolated Docker containers
-- Automatic cleanup
-- Safe for production environments
+- Same as default (container testing if Docker available)
+- Bypasses all interactive prompts
+- Falls back to static analysis if Docker not available
 
-**Requires**: Docker or Podman
-
-**Use case**: Production-safe comprehensive testing
+**Use case**: CI/CD pipelines, automated scripts
 
 ---
 
 ### Mode 5: SBOM-Only (Multi-Stage Build)
 ```bash
-python graviton_validator.py --sbom-only -d ./sboms/
+python graviton_validator.py --extract-manifests -d ./sboms/
 ```
 
 **What it does**:
@@ -161,7 +166,7 @@ python graviton_validator.py --sbom-only -d ./sboms/
 
 ### Mode 6: Runtime-Only (Multi-Stage Build)
 ```bash
-python graviton_validator.py --runtime-only auto --test --containers
+python graviton_validator.py --test-manifests auto --yes
 ```
 
 **What it does**:
@@ -177,7 +182,7 @@ python graviton_validator.py --runtime-only auto --test --containers
 
 ### Mode 7: Direct Manifest Analysis
 ```bash
-python graviton_validator.py --runtime-only python --input-file requirements.txt --test --containers
+python graviton_validator.py --test-manifests python --input-file requirements.txt --yes
 ```
 
 **What it does**:
@@ -190,7 +195,7 @@ python graviton_validator.py --runtime-only python --input-file requirements.txt
 
 ### Mode 8: Merge Reports
 ```bash
-python graviton_validator.py --merge report1.json report2.json -f excel
+python graviton_validator.py --merge-reports report1.json report2.json -f excel
 ```
 
 **What it does**:
@@ -204,7 +209,7 @@ python graviton_validator.py --merge report1.json report2.json -f excel
 
 ### Mode 9: Merge Runtime Results
 ```bash
-python graviton_validator.py --merge-runtime ./output_files/ -f excel
+python graviton_validator.py --merge-results ./output_files/ -f excel
 ```
 
 **What it does**:
@@ -286,13 +291,25 @@ S3 Upload → EventBridge → Lambda → AWS Batch → EC2 (Graviton3) → S3 Re
 ### Deployment
 
 ```bash
-# Deploy infrastructure
+# Deploy infrastructure with auto-managed state bucket
 ./deploy.sh
 
+# Or use existing state bucket
+./deploy.sh deploy --state-bucket my-existing-bucket
+
 # Automatically handles:
+# - Terraform state bucket creation/management
 # - Terraform deployment
 # - EventBridge configuration
 # - Verification
+
+# Manual deployment (requires state bucket)
+cd terraform
+terraform init \
+  -backend-config="bucket=my-terraform-state-bucket" \
+  -backend-config="region=us-east-1"
+terraform apply
+cd ..
 ```
 
 ### Usage Modes
@@ -351,15 +368,15 @@ aws s3 cp batch-manifest.txt s3://bucket/input/batch/project/
 
 ```bash
 # Stage 1: Generate manifests (fast, parallel)
-python graviton_validator.py --sbom-only -d ./sboms/
+python graviton_validator.py --extract-manifests -d ./sboms/
 
 # Stage 2: Test runtimes (parallel on different machines)
-python graviton_validator.py --runtime-only python --test --containers &
-python graviton_validator.py --runtime-only nodejs --test --containers &
-python graviton_validator.py --runtime-only java --test --containers &
+python graviton_validator.py --test-manifests python --yes &
+python graviton_validator.py --test-manifests nodejs --yes &
+python graviton_validator.py --test-manifests java --yes &
 
 # Stage 3: Merge results
-python graviton_validator.py --merge-runtime -f excel
+python graviton_validator.py --merge-results -f excel
 ```
 
 **Benefits**:
@@ -375,21 +392,21 @@ python graviton_validator.py --merge-runtime -f excel
 ### 1. Always Use Containers with Testing
 ```bash
 # Good
-python graviton_validator.py sbom.json --runtime --test --containers
+python graviton_validator.py sbom.json --yes
 
 # Risky
-python graviton_validator.py sbom.json --runtime --test
+python graviton_validator.py sbom.json --test-local
 ```
 
 ### 2. Use Multi-Stage for Large Portfolios
 ```bash
 # For 100+ applications
---sbom-only → parallel --runtime-only → --merge-runtime
+--extract-manifests → parallel --test-manifests → --merge-results
 ```
 
 ### 3. Enable Verbose Logging for Troubleshooting
 ```bash
-python graviton_validator.py sbom.json --runtime --test --containers -v --log-file debug.log
+python graviton_validator.py sbom.json --yes -v --log-file debug.log
 ```
 
 ### 4. Use Custom Knowledge Bases
@@ -399,7 +416,7 @@ python graviton_validator.py sbom.json -k company-kb.json -k team-kb.json
 
 ### 5. Keep Temp Files for Debugging
 ```bash
-python graviton_validator.py sbom.json --runtime --test --no-cleanup
+python graviton_validator.py sbom.json --test-local --no-cleanup
 ```
 
 ---
@@ -442,6 +459,31 @@ For detailed information about these scripts and their usage, see [scripts/READM
 ---
 
 ## See Also
+
+## Analysis Cache
+
+When processing multiple SBOMs, the tool uses an in-memory cache to avoid redundant analysis.
+
+**How it works:**
+- Each component result is cached by `(name, version, type, detected_os)`
+- Static analysis (KB lookups) and runtime test results are cached separately
+- On cache hit, the cached result is reused instead of re-analyzing
+- Runtime testing skips container runs entirely when all packages are already cached
+
+**Impact:**
+- 39 identical SBOMs: ~97% cache hit rate, seconds instead of minutes for static analysis
+- Runtime testing: container runs eliminated for duplicate package sets
+
+**Scope:** In-memory only, per-run. Cache is not persisted to disk to avoid stale results from KB updates.
+
+Cache statistics are logged at the end of each run:
+```
+INFO - Analysis cache: 383 hits, 385 misses, 49.9% hit rate, 383 entries cached
+```
+
+---
+
+## Related Documentation
 
 - [CLI Reference](CLI_REFERENCE.md) - Complete command-line options
 - [Quick Start](QUICK_START.md) - Getting started guide
