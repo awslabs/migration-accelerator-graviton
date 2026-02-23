@@ -31,7 +31,7 @@ Multi-stage SBOM compatibility analyzer for AWS Graviton (ARM64) migration asses
 
 ### Tool Architecture & Flow
 
-![Tool Architecture Flow](../images/tool-architecture-flow.drawio.png)
+![Tool Architecture Flow](../images/tool-architecture-flow.png)
 
 The diagram above shows the internal architecture with three main layers:
 1. **Input Layer**: SBOM parsing and component extraction
