@@ -163,12 +163,15 @@ BUCKET_NAME=$(cd terraform && terraform output -raw s3_bucket_name)
 aws s3 cp my-app-sbom.json s3://$BUCKET_NAME/input/individual/
 
 # Batch mode: Upload multiple SBOMs and manifest file
+# Step 1: Upload SBOMs (does NOT trigger analysis)
 aws s3 sync ./my-sbom-files/ s3://$BUCKET_NAME/input/batch/my-project/
+# Step 2: Create manifest with filenames only (no paths)
 cat > batch-manifest.txt <<EOF
 app1.sbom.json
 app2.sbom.json
 app3.sbom.json
 EOF
+# Step 3: Upload manifest (THIS triggers the batch job)
 aws s3 cp batch-manifest.txt s3://$BUCKET_NAME/input/batch/my-project/
 ```
 

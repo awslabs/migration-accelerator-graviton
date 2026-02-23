@@ -85,6 +85,7 @@ APG Content Guidelines.pdf
 
 #ASH scan
 .ash/
+.ashignore
 
 
 .terraform/
@@ -119,3 +120,6 @@ dummy-source-corrected.zip
 # Output files (except README)
 output_files/*
 !output_files/README.md
+
+# Runtime analysis cache
+.cache/

@@ -56,7 +56,7 @@ CRITICAL_PACKAGES = {'pip', 'pip3', 'setuptools', 'wheel', 'distutils', 'request
 
 def get_pip_command() -> str:
     """Detect available pip command with fallback mechanism."""
-    pip_commands = ['pip3', 'pip', 'python3 -m pip', 'python -m pip']
+    pip_commands = [f'{sys.executable} -m pip', 'pip3', 'pip', 'python3 -m pip', 'python -m pip']
     
     for cmd in pip_commands:
         try:
@@ -68,9 +68,9 @@ def get_pip_command() -> str:
         except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
             continue
     
-    # Fallback to pip3 if nothing works
-    warn("No pip command found, falling back to pip3", "PYTHON_INSTALLER")
-    return 'pip3'
+    # Fallback to sys.executable -m pip
+    warn("No pip command found, falling back to sys.executable -m pip", "PYTHON_INSTALLER")
+    return f'{sys.executable} -m pip'
 
 def analyze_python_packages(requirements_file: str) -> List[ComponentResult]:
     """Test Python packages with intelligent multi-version handling."""

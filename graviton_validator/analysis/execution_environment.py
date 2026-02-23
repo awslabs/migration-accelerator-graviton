@@ -10,6 +10,7 @@ import shutil
 import os
 import json
 import logging
+import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -212,7 +213,7 @@ class NativeExecutionEnvironment(ExecutionEnvironment):
             
             # Build command
             script_name = get_runtime_script_name(runtime)
-            cmd = ['python3', script_name, manifest_name]
+            cmd = [sys.executable, script_name, manifest_name]
             
             # Add runtime-specific flags
             if runtime == 'java':
