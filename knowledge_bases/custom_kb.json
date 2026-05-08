@@ -1363,6 +1363,24 @@
       }
     },
     {
+      "name": "node_exporter",
+      "aliases": [
+        "node-exporter",
+        "prometheus-node-exporter"
+      ],
+      "compatibility": {
+        "supported_versions": [
+          {
+            "version_range": ">=1.0.0",
+            "status": "compatible",
+            "notes": "Prometheus Node Exporter - linux-arm64 binaries available in every release since v1.0.0. Written in Go, cross-compiles natively to ARM64."
+          }
+        ],
+        "minimum_supported_version": "1.0.0",
+        "recommended_version": "1.10.2"
+      }
+    },
+    {
       "name": "influxd",
       "aliases": [
         "influxdb"

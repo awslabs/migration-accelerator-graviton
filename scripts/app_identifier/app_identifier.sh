@@ -1053,6 +1053,11 @@ generate_container_sbom() {
     local hostname=$(echo "$system_info" | jq -r '.hostname')
     local instance_id=$(echo "$system_info" | jq -r '.ec2.instance_id // empty')
 
+    # Detect container OS from its overlay filesystem
+    local container_os_name=$(get_os_info "$rootfs" | grep 'OS Name:' | awk -F: '{print $NF}' | xargs)
+    local container_os_version=$(get_os_info "$rootfs" | grep 'OS Version:' | awk -F: '{print $NF}' | xargs)
+    log "DEBUG" "Container OS: $container_os_name $container_os_version"
+
     # Collect packages
     local components_file=$(mktemp)
     echo '[]' > "$components_file"
@@ -1095,6 +1100,8 @@ generate_container_sbom() {
         --arg base_image "${base_image:-unknown}" \
         --arg hostname "$hostname" \
         --arg instance_id "${instance_id:-}" \
+        --arg container_os_name "${container_os_name:-unknown}" \
+        --arg container_os_version "${container_os_version:-unknown}" \
         --slurpfile components "$components_file" \
         '{
             bomFormat: $bomFormat,
@@ -1105,10 +1112,10 @@ generate_container_sbom() {
                 timestamp: $timestamp,
                 tools: [{vendor:"AWS",name:"graviton-migration-accelerator",version:"1.0.0"}],
                 component: {
-                    type: "container",
-                    name: $container_name,
-                    version: $image_name,
-                    description: ("Container: " + $container_name + " Image: " + $image_name)
+                    type: "operating-system",
+                    name: ($container_os_name + " (" + $container_name + ")"),
+                    version: $container_os_version,
+                    description: ("Container: " + $container_name + " Image: " + $image_name + " OS: " + $container_os_name + " " + $container_os_version)
                 },
                 properties: [
                     {name:"container:image", value:$image_name},
@@ -1250,42 +1257,43 @@ validate_json() {
 
 # Function to get OS information
 get_os_info() {
-    log "DEBUG" "Getting OS information"
+    local root_prefix="${1:-}"
+    log "DEBUG" "Getting OS information (root: ${root_prefix:-/})"
     local os_name=""
     local os_version=""
     local os_id=""
     local pretty_name=""
 
-    if [ -f /etc/os-release ]; then
-        log "DEBUG" "Using /etc/os-release for OS information"
-        . /etc/os-release
+    if [ -f "${root_prefix}/etc/os-release" ]; then
+        log "DEBUG" "Using ${root_prefix}/etc/os-release for OS information"
+        . "${root_prefix}/etc/os-release"
         os_name=$NAME
         os_version=$VERSION_ID
         os_id=$ID
         pretty_name=$PRETTY_NAME
     else
-        log "DEBUG" "No /etc/os-release found, trying alternative methods"
-        if [ -f /etc/lsb-release ]; then
-            log "DEBUG" "Using /etc/lsb-release for OS information"
-            . /etc/lsb-release
+        log "DEBUG" "No ${root_prefix}/etc/os-release found, trying alternative methods"
+        if [ -f "${root_prefix}/etc/lsb-release" ]; then
+            log "DEBUG" "Using ${root_prefix}/etc/lsb-release for OS information"
+            . "${root_prefix}/etc/lsb-release"
             os_name=$DISTRIB_ID
             os_version=$DISTRIB_RELEASE
-        elif [ -f /etc/debian_version ]; then
-            log "DEBUG" "Using /etc/debian_version for OS information"
+        elif [ -f "${root_prefix}/etc/debian_version" ]; then
+            log "DEBUG" "Using ${root_prefix}/etc/debian_version for OS information"
             os_name="Debian"
-            os_version=$(cat /etc/debian_version)
-        elif [ -f /etc/redhat-release ]; then
-            log "DEBUG" "Using /etc/redhat-release for OS information"
-            os_name=$(cat /etc/redhat-release | cut -d ' ' -f 1)
-            os_version=$(cat /etc/redhat-release | sed 's/.*release \([^ ]*\).*/\1/')
-        elif [ -f /etc/centos-release ]; then
-            log "DEBUG" "Using /etc/centos-release for OS information"
-            os_name=$(cat /etc/centos-release | cut -d ' ' -f 1)
-            os_version=$(cat /etc/centos-release | sed 's/.*release \([^ ]*\).*/\1/')
-        elif [ -f /etc/SuSE-release ]; then
-            log "DEBUG" "Using /etc/SuSE-release for OS information"
+            os_version=$(cat "${root_prefix}/etc/debian_version")
+        elif [ -f "${root_prefix}/etc/redhat-release" ]; then
+            log "DEBUG" "Using ${root_prefix}/etc/redhat-release for OS information"
+            os_name=$(cat "${root_prefix}/etc/redhat-release" | cut -d ' ' -f 1)
+            os_version=$(cat "${root_prefix}/etc/redhat-release" | sed 's/.*release \([^ ]*\).*/\1/')
+        elif [ -f "${root_prefix}/etc/centos-release" ]; then
+            log "DEBUG" "Using ${root_prefix}/etc/centos-release for OS information"
+            os_name=$(cat "${root_prefix}/etc/centos-release" | cut -d ' ' -f 1)
+            os_version=$(cat "${root_prefix}/etc/centos-release" | sed 's/.*release \([^ ]*\).*/\1/')
+        elif [ -f "${root_prefix}/etc/SuSE-release" ]; then
+            log "DEBUG" "Using ${root_prefix}/etc/SuSE-release for OS information"
             os_name="SuSE"
-            os_version=$(cat /etc/SuSE-release | tr "\n" ' ' | sed 's/.*= *\([0-9]*\).*/\1/')
+            os_version=$(cat "${root_prefix}/etc/SuSE-release" | tr "\n" ' ' | sed 's/.*= *\([0-9]*\).*/\1/')
         fi
     fi
 

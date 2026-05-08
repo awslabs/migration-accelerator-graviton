@@ -68,13 +68,26 @@ class RubyCompatibilityAnalyzer:
         logger.debug(f"[RUBY_ANALYZER] Gem groups: {list(gem_groups.keys())}")
         
         results = []
+        total_gems = len(gem_groups)
+        analysis_start = time.time()
+        compatible_count = 0
+        upgrade_count = 0
         for index, (gem_name, versions) in enumerate(gem_groups.items()):
-            logger.info(f"[RUBY_ANALYZER] Processing gem {index + 1}/{len(gem_groups)}: {gem_name} (versions: {versions})")
+            if index == 0 or (index + 1) % 10 == 0 or total_gems <= 20:
+                logger.info(f"[RUBY_ANALYZER] Processing gem {index + 1}/{total_gems}: {gem_name} (versions: {versions})")
+                sys.stderr.flush()
             gem_results = self._test_gem_versions(gem_name, versions)
             logger.debug(f"[RUBY_ANALYZER] Gem {gem_name} produced {len(gem_results)} results")
+            for r in gem_results:
+                if r.compatibility.status == CompatibilityStatus.COMPATIBLE:
+                    compatible_count += 1
+                elif r.compatibility.status == CompatibilityStatus.NEEDS_UPGRADE:
+                    upgrade_count += 1
             results.extend(gem_results)
         
-        logger.info(f"[RUBY_ANALYZER] Ruby package analysis complete. Total results: {len(results)}")
+        elapsed = time.time() - analysis_start
+        logger.info(f"[RUBY_ANALYZER] Ruby analysis complete: {len(results)} packages processed in {elapsed:.1f}s — {compatible_count} compatible, {upgrade_count} need upgrade")
+        sys.stderr.flush()
         return results
     
     def _parse_gemfile(self, gemfile_path: str) -> List[Tuple[str, str]]:

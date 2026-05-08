@@ -24,6 +24,25 @@ RELEVANCE_THRESHOLD = 0.85
 # Component types that are language-level dependencies (skip these)
 LANGUAGE_PACKAGE_TYPES = {"pip", "npm", "maven", "gem", "nuget", "pypi", "golang"}
 
+# Module-level cache for ARM MCP results across multiple SBOMs in a single run
+_arm_mcp_cache: Dict[str, Optional[Dict]] = {}
+
+# Singleton MCP client - started once, reused across all SBOMs
+_mcp_client: Optional[ArmMcpClient] = None
+_mcp_init_attempted: bool = False
+
+
+def _get_mcp_client() -> Optional[ArmMcpClient]:
+    """Get or create singleton MCP client."""
+    global _mcp_client, _mcp_init_attempted
+    if _mcp_init_attempted:
+        return _mcp_client
+    _mcp_init_attempted = True
+    client = ArmMcpClient()
+    if client.connect():
+        _mcp_client = client
+    return _mcp_client
+
 
 def _is_language_package(result: ComponentResult) -> bool:
     """Check if a component is a language-level dependency (handled by runtime testing)."""
@@ -103,46 +122,61 @@ def enrich_with_arm_ecosystem(analysis_result: AnalysisResult) -> AnalysisResult
 
     logger.info(f"ARM ecosystem enrichment: {len(candidates)} unique components to check")
 
-    # Connect to ARM MCP server
-    client = ArmMcpClient()
-    if not client.connect():
+    # Get singleton MCP client (starts container only on first call)
+    client = _get_mcp_client()
+    if not client:
         logger.warning("Skipping ARM ecosystem enrichment - no container runtime available")
         return analysis_result
 
     try:
         enriched_count = 0
+        cache_hits = 0
         for name, component_results in candidates.items():
-            query = f"{name} arm64 aarch64"
-            results = client.knowledge_base_search(query)
+            # Check cache first
+            if name in _arm_mcp_cache:
+                cache_hits += 1
+                cached = _arm_mcp_cache[name]
+                if cached is None:
+                    continue
+                status_text, min_version, rec_version, arm_note = cached["status"], cached["min_ver"], cached["rec_ver"], cached["note"]
+            else:
+                query = f"{name} arm64 aarch64"
+                results = client.knowledge_base_search(query)
 
-            if not results:
-                continue
+                if not results:
+                    _arm_mcp_cache[name] = None
+                    continue
 
-            # Find best relevant result
-            best = None
-            for r in results:
-                dist = r.get("distance", 1.0)
-                if dist < RELEVANCE_THRESHOLD:
-                    if best is None or dist < best.get("distance", 1.0):
-                        best = r
+                # Find best relevant result
+                best = None
+                for r in results:
+                    dist = r.get("distance", 1.0)
+                    if dist is None:
+                        dist = 1.0
+                    if dist < RELEVANCE_THRESHOLD:
+                        if best is None or dist < (best.get("distance") or 1.0):
+                            best = r
 
-            if not best:
-                continue
+                if not best:
+                    _arm_mcp_cache[name] = None
+                    continue
 
-            snippet = best.get("snippet", "")
-            title = best.get("title", "")
-            url = best.get("url", "")
-            status_text, min_version, rec_version = _parse_arm_snippet(snippet)
+                snippet = best.get("snippet", "")
+                url = best.get("url", "")
+                status_text, min_version, rec_version = _parse_arm_snippet(snippet)
 
-            if not status_text:
-                continue
+                if not status_text:
+                    _arm_mcp_cache[name] = None
+                    continue
 
-            # Update all component results with this name
-            for cr in component_results:
                 arm_note = f"ARM Ecosystem Dashboard: {snippet[:150].strip()}"
                 if url:
                     arm_note += f" (source: {url})"
 
+                _arm_mcp_cache[name] = {"status": status_text, "min_ver": min_version, "rec_ver": rec_version, "note": arm_note}
+
+            # Update all component results with this name
+            for cr in component_results:
                 existing_notes = cr.compatibility.notes or ""
                 cr.compatibility.notes = f"{existing_notes}. {arm_note}".strip(". ")
 
@@ -155,6 +189,9 @@ def enrich_with_arm_ecosystem(analysis_result: AnalysisResult) -> AnalysisResult
                         cr.compatibility.recommended_version = rec_version
 
                 enriched_count += 1
+
+        if cache_hits:
+            logger.info(f"ARM ecosystem cache: {cache_hits} hits, {len(candidates) - cache_hits} queries")
 
         # Recount statistics
         if enriched_count > 0:
@@ -171,6 +208,6 @@ def enrich_with_arm_ecosystem(analysis_result: AnalysisResult) -> AnalysisResult
         logger.info(f"ARM ecosystem enrichment complete: {enriched_count} components updated")
 
     finally:
-        client.close()
+        pass  # Singleton client stays alive for reuse across SBOMs
 
     return analysis_result

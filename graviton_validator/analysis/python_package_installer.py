@@ -121,13 +121,26 @@ def analyze_python_packages(requirements_file: str) -> List[ComponentResult]:
         debug(f"Package {package}: sorted versions {original_versions} -> {package_groups[package]}", "PYTHON_PARSER")
     
     results = []
+    total_packages = len(package_groups)
+    analysis_start = time.time()
+    compatible_count = 0
+    upgrade_count = 0
     for i, (package_name, versions) in enumerate(package_groups.items(), 1):
-        info(f"Processing package {i}/{len(package_groups)}: {package_name} (versions: {', '.join(versions)})", "PYTHON_ANALYZER")
+        if i == 1 or i % 10 == 0 or total_packages <= 20:
+            info(f"Processing package {i}/{total_packages}: {package_name} (versions: {', '.join(versions)})", "PYTHON_ANALYZER")
+            sys.stderr.flush()
         package_results = analyze_package_versions(package_name, versions)
         debug(f"Package {package_name} produced {len(package_results)} results", "PYTHON_ANALYZER")
+        for r in package_results:
+            if r.compatibility.status == CompatibilityStatus.COMPATIBLE:
+                compatible_count += 1
+            elif r.compatibility.status == CompatibilityStatus.NEEDS_UPGRADE:
+                upgrade_count += 1
         results.extend(package_results)
     
-    info(f"Python package analysis complete. Total results: {len(results)}", "PYTHON_ANALYZER")
+    elapsed = time.time() - analysis_start
+    info(f"Python analysis complete: {len(results)} packages processed in {elapsed:.1f}s — {compatible_count} compatible, {upgrade_count} need upgrade", "PYTHON_ANALYZER")
+    sys.stderr.flush()
     return results
 
 def analyze_package_versions(package_name: str, versions: List[str]) -> List[ComponentResult]:

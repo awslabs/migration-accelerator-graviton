@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import shutil
 import logging
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
@@ -80,11 +81,26 @@ class NodeJSPackageInstaller:
             
             package_groups = self._group_and_sort_packages(dependencies)
             results = []
+            total_packages = len(package_groups)
+            analysis_start = time.time()
+            compatible_count = 0
+            upgrade_count = 0
             
-            for package_name, versions in package_groups.items():
+            for idx, (package_name, versions) in enumerate(package_groups.items(), 1):
+                if idx == 1 or idx % 10 == 0 or total_packages <= 20:
+                    logger.info(f"Processing package {idx}/{total_packages}: {package_name}...")
+                    sys.stderr.flush()
                 package_results = self._test_package_versions(package_name, versions, package_data)
+                for r in package_results:
+                    if r.compatibility.status == CompatibilityStatus.COMPATIBLE:
+                        compatible_count += 1
+                    elif r.compatibility.status == CompatibilityStatus.NEEDS_UPGRADE:
+                        upgrade_count += 1
                 results.extend(package_results)
             
+            elapsed = time.time() - analysis_start
+            logger.info(f"Node.js analysis complete: {len(results)} packages processed in {elapsed:.1f}s — {compatible_count} compatible, {upgrade_count} need upgrade")
+            sys.stderr.flush()
             return results
             
         except Exception as error:
