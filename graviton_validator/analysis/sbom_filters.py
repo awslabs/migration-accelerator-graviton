@@ -36,7 +36,7 @@ class CycloneDXAppIdentifierFilter(SBOMFilterStrategy):
         return "CycloneDX"
     
     def should_exclude_component(self, component: SoftwareComponent) -> bool:
-        """Exclude both system packages and OS/kernel components."""
+        """Exclude only OS/kernel components - keep system packages for analysis."""
         component_dict = {
             "name": component.name,
             "version": component.version,
@@ -44,8 +44,11 @@ class CycloneDXAppIdentifierFilter(SBOMFilterStrategy):
             "properties": component.properties
         }
         
-        return (self.component_filter.is_system_package(component_dict) or 
-                self.component_filter.is_os_kernel_component(component_dict))
+        # Keep system packages (RPM/DEB) - they are the main content of app_identifier SBOMs
+        if self.component_filter.is_system_package(component_dict):
+            return False
+        
+        return self.component_filter.is_os_kernel_component(component_dict)
 
 
 class CycloneDXThirdPartyFilter(SBOMFilterStrategy):

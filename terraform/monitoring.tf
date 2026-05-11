@@ -10,19 +10,17 @@ resource "aws_cloudwatch_dashboard" "main" {
         type   = "metric"
         x      = 0
         y      = 0
-        width  = 8
+        width  = 12
         height = 6
         properties = {
           metrics = [
-            ["AWS/Batch", "JobsSubmitted", "JobQueue", aws_batch_job_queue.main.name],
-            [".", "JobsRunning", ".", "."],
-            [".", "JobsSucceeded", ".", "."],
-            [".", "JobsFailed", ".", "."]
+            ["AWS/Lambda", "Invocations", "FunctionName", aws_lambda_function.batch_trigger.function_name, { label = "Jobs Triggered" }],
+            [".", "Errors", ".", ".", { label = "Trigger Errors" }]
           ]
           period = 300
           stat   = "Sum"
           region = var.aws_region
-          title  = "Batch Job Status (5min)"
+          title  = "Job Submissions (via Lambda)"
           yAxis = {
             left = {
               min = 0
@@ -32,42 +30,19 @@ resource "aws_cloudwatch_dashboard" "main" {
       },
       {
         type   = "metric"
-        x      = 8
+        x      = 12
         y      = 0
-        width  = 8
+        width  = 12
         height = 6
         properties = {
           metrics = [
-            ["AWS/Batch", "RunningJobs", "JobQueue", aws_batch_job_queue.main.name, { stat = "Average", label = "Running Jobs" }],
-            [".", "RunnableJobs", ".", ".", { stat = "Average", label = "Queued Jobs" }]
+            ["AWS/Lambda", "Duration", "FunctionName", aws_lambda_function.batch_trigger.function_name, { stat = "Average", label = "Avg Duration (ms)" }],
+            [".", "ConcurrentExecutions", ".", ".", { stat = "Maximum", label = "Concurrent Executions" }]
           ]
-          period = 60
+          period = 300
           stat   = "Average"
           region = var.aws_region
-          title  = "Active Jobs (Real-time)"
-          yAxis = {
-            left = {
-              min = 0
-            }
-          }
-        }
-      },
-      {
-        type   = "metric"
-        x      = 16
-        y      = 0
-        width  = 8
-        height = 6
-        properties = {
-          metrics = [
-            ["AWS/Lambda", "Invocations", "FunctionName", aws_lambda_function.batch_trigger.function_name],
-            [".", "Errors", ".", "."],
-            [".", "Duration", ".", ".", { stat = "Average" }]
-          ]
-          period = 300
-          stat   = "Sum"
-          region = var.aws_region
-          title  = "Lambda Metrics"
+          title  = "Lambda Performance"
         }
       },
       {

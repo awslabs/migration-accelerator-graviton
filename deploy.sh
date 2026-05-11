@@ -84,17 +84,26 @@ check_prerequisites() {
 
 deploy_terraform() {
     local state_bucket="$1"
+    local state_key="$2"
+    local state_region="$3"
     
-    print_status "Deploying Terraform infrastructure with state bucket: $state_bucket"
+    print_status "Deploying to $AWS_REGION (state bucket: $state_bucket in $state_region)"
     
     cd terraform
     
-    # Initialize with remote state
-    terraform init -reconfigure \
-        -backend-config="bucket=$state_bucket" \
-        -backend-config="region=$AWS_REGION"
+    # Initialize with remote state (state bucket region may differ from deployment region)
+    local backend_args=(
+        -backend-config="bucket=$state_bucket"
+        -backend-config="region=$state_region"
+    )
+    if [ -n "$state_key" ]; then
+        backend_args+=(-backend-config="key=$state_key")
+        print_status "Using custom state key: $state_key"
+    fi
     
-    terraform plan -out=tfplan
+    terraform init -reconfigure "${backend_args[@]}"
+    
+    terraform plan -var="aws_region=$AWS_REGION" -out=tfplan
     terraform apply tfplan
     
     BUCKET_NAME=$(terraform output -raw s3_bucket_name)
@@ -184,13 +193,17 @@ Commands:
   
 Options:
   --state-bucket NAME   Use existing S3 bucket for Terraform state
+  --state-key KEY       Custom S3 key/path for state file (default: migration-accelerator-graviton/terraform.tfstate)
+  --state-region REGION Region where the state bucket resides (default: same as --region)
   --delete-state        Delete state bucket when destroying (use with destroy)
-  --region REGION       AWS region (default: us-east-1)
+  --region REGION       AWS region for deployment (default: us-east-1)
   --help               Show this help message
 
 Examples:
   $0                                    # Deploy with auto-created state bucket
   $0 deploy --state-bucket my-bucket    # Deploy with existing state bucket
+  $0 deploy --state-bucket my-shared-bucket --state-key projects/graviton/terraform.tfstate
+  $0 deploy --state-bucket my-bucket --state-region us-east-1 --region ap-south-1  # Cross-region
   $0 destroy                           # Destroy but keep state bucket
   $0 destroy --delete-state            # Destroy and delete state bucket
 
@@ -202,6 +215,8 @@ EOF
 main() {
     local command="deploy"
     local state_bucket=""
+    local state_key=""
+    local state_region=""
     local delete_state="false"
     
     # Parse arguments
@@ -213,6 +228,14 @@ main() {
                 ;;
             --state-bucket)
                 state_bucket="$2"
+                shift 2
+                ;;
+            --state-key)
+                state_key="$2"
+                shift 2
+                ;;
+            --state-region)
+                state_region="$2"
                 shift 2
                 ;;
             --delete-state)
@@ -240,7 +263,7 @@ main() {
     case $command in
         deploy)
             local bucket=$(get_state_bucket "$state_bucket")
-            deploy_terraform "$bucket"
+            deploy_terraform "$bucket" "$state_key" "${state_region:-$AWS_REGION}"
             
             cd terraform
             local s3_bucket=$(terraform output -raw s3_bucket_name)
@@ -253,7 +276,7 @@ main() {
             echo
             echo "Next steps:"
             echo "1. Upload SBOM files to: s3://$s3_bucket/input/individual/"
-            echo "2. Monitor jobs: aws batch list-jobs --job-queue $(cd terraform && terraform output -raw batch_job_queue_name)"
+            echo "2. Monitor jobs: $(cd terraform && terraform output -raw batch_console_url)"
             echo "3. View results: aws s3 ls s3://$s3_bucket/output/ --recursive"
             echo "4. Dashboard: $(cd terraform && terraform output -raw dashboard_url)"
             ;;

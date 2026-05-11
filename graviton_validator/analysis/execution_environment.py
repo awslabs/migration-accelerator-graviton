@@ -10,6 +10,7 @@ import shutil
 import os
 import json
 import logging
+import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -212,7 +213,7 @@ class NativeExecutionEnvironment(ExecutionEnvironment):
             
             # Build command
             script_name = get_runtime_script_name(runtime)
-            cmd = ['python3', script_name, manifest_name]
+            cmd = [sys.executable, script_name, manifest_name]
             
             # Add runtime-specific flags
             if runtime == 'java':
@@ -426,11 +427,13 @@ class ContainerExecutionEnvironment(ExecutionEnvironment):
             
 
             
+            build_start = time.time()
             build_result = subprocess.run(
-                build_cmd, capture_output=True, text=True, cwd=temp_dir, timeout=300
+                build_cmd, capture_output=True, text=True, cwd=temp_dir, timeout=kwargs.get('container_timeout', 600)
             )
+            build_elapsed = time.time() - build_start
             
-            logger.debug(f"{self.container_tool.title()} build completed - Return code: {build_result.returncode}")
+            logger.debug(f"{self.container_tool.title()} build completed in {build_elapsed:.1f}s - Return code: {build_result.returncode}")
             if build_result.stdout:
                 logger.debug(f"{self.container_tool.title()} build stdout ({len(build_result.stdout)} chars): {build_result.stdout[:500]}...")
             if build_result.stderr:
@@ -573,11 +576,13 @@ class ContainerExecutionEnvironment(ExecutionEnvironment):
                 'output_file_path': output_file_path
             }
             
-        except subprocess.TimeoutExpired:
-            logger.error(f"Container analysis timed out for {runtime} after {kwargs.get('container_timeout', 180)} seconds")
+        except subprocess.TimeoutExpired as te:
+            timed_out_cmd = ' '.join(te.cmd[:3]) if te.cmd else 'unknown'
+            phase = 'build' if 'build' in timed_out_cmd else 'run'
+            logger.error(f"Container {phase} timed out for {runtime} after {te.timeout} seconds (cmd: {timed_out_cmd})")
             return {
                 'success': False,
-                'error': f'Container analysis timed out for {runtime}',
+                'error': f'Container {phase} timed out for {runtime} after {te.timeout}s',
                 'environment': f'container_{runtime}_{kwargs.get("runtime_version", "unknown")}'
             }
         except Exception as e:

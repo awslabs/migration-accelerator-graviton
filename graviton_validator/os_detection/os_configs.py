@@ -62,7 +62,7 @@ class OSConfigManager:
     
     def is_os_graviton_compatible(self, os_name: str, version: Optional[str] = None) -> bool:
         """Check if OS and version are Graviton compatible."""
-        os_info = self._os_data.get("supported_operating_systems", {}).get(os_name)
+        os_info = self._find_os_entry(os_name)
         if not os_info:
             return False
         
@@ -99,9 +99,19 @@ class OSConfigManager:
         """Get all detection rules from the configuration."""
         return self._os_data.get("detection_rules", {})
     
+    def _find_os_entry(self, os_name: str) -> Optional[Dict[str, Any]]:
+        """Find OS entry by exact match or longest prefix match."""
+        supported_os = self._os_data.get("supported_operating_systems", {})
+        entry = supported_os.get(os_name)
+        if not entry:
+            for key in sorted(supported_os.keys(), key=len, reverse=True):
+                if os_name.startswith(key):
+                    return supported_os[key]
+        return entry
+
     def get_os_info(self, os_name: str) -> Optional[Dict[str, Any]]:
         """Get complete OS information."""
-        return self._os_data.get("supported_operating_systems", {}).get(os_name)
+        return self._find_os_entry(os_name)
     
     def reload_config(self) -> None:
         """Reload configuration from file, clearing cache."""

@@ -1065,18 +1065,30 @@ def analyze_pom_file(pom_path: str, deep_scan: bool = False, runtime_test: bool 
 
     
     results = []
+    total_groups = len(dependency_groups)
+    analysis_start = time.time()
+    compatible_count = 0
+    upgrade_count = 0
     
     try:
         for i, (group_key, group_deps) in enumerate(dependency_groups.items(), 1):
-            debug(f"[POM_ANALYZE_GROUP] Analyzing group {i}/{len(dependency_groups)}: {group_key} ({len(group_deps)} versions)")
+            if i == 1 or i % 10 == 0 or total_groups <= 20:
+                info(f"Processing dependency {i}/{total_groups}: {group_key}...")
+                sys.stderr.flush()
+            debug(f"[POM_ANALYZE_GROUP] Analyzing group {i}/{total_groups}: {group_key} ({len(group_deps)} versions)")
             group_results = analyze_dependency_versions(group_key, group_deps, analyzer, 
                                                        deep_scan, runtime_test)
             debug(f"[POM_ANALYZE_GROUP_RESULT] Group {group_key} produced {len(group_results)} results")
             results.extend(group_results)
+            for r in group_results:
+                if r.compatibility.status == CompatibilityStatus.COMPATIBLE:
+                    compatible_count += 1
+                elif r.compatibility.status == CompatibilityStatus.NEEDS_UPGRADE:
+                    upgrade_count += 1
     
-        
-        debug(f"Analysis complete. Generated {len(results)} results")
-        info(f"Analysis complete. Generated {len(results)} results")
+        elapsed = time.time() - analysis_start
+        info(f"Java analysis complete: {len(results)} packages processed in {elapsed:.1f}s — {compatible_count} compatible, {upgrade_count} need upgrade")
+        sys.stderr.flush()
     
     finally:
         # Cleanup analyzer resources

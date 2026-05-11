@@ -299,6 +299,13 @@ class GravitonCompatibilityAnalyzer(CompatibilityAnalyzer):
             "purl": component.properties.get('purl', '') if component.properties else ''
         }
         
+        # Check knowledge base BEFORE runtime detection to prevent false positives
+        # (e.g., node_exporter misclassified as Node.js package)
+        kb_result = self.knowledge_base.get_compatibility(component.name, component.version or "")
+        if kb_result.status != CompatibilityStatus.UNKNOWN:
+            logger.debug(f"KB match found for {component.name}: {kb_result.status}")
+            return ComponentResult(component=component, compatibility=kb_result)
+        
         runtime_type = self.component_filter.detect_runtime_type(component_dict)
         if runtime_type and runtime_type in self.runtime_analyzers:
             logger.debug(f"Using {runtime_type} analyzer for component {component.name}")

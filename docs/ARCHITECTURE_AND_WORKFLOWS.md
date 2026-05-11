@@ -31,7 +31,7 @@ Multi-stage SBOM compatibility analyzer for AWS Graviton (ARM64) migration asses
 
 ### Tool Architecture & Flow
 
-![Tool Architecture Flow](../images/tool-architecture-flow.drawio.png)
+![Tool Architecture Flow](../images/tool-architecture-flow.png)
 
 The diagram above shows the internal architecture with three main layers:
 1. **Input Layer**: SBOM parsing and component extraction
@@ -237,6 +237,26 @@ Load default config → Apply custom config → Override with CLI args
 ```
 Detect format → Parse components → Extract metadata → Identify system packages
 ```
+
+### Step 3.5: OS Detection & Compatibility Check
+
+The tool detects the operating system from SBOM metadata and checks Graviton compatibility using `schemas/graviton_os_compatibility.json`.
+
+**Supported Graviton-compatible OSes:**
+- Amazon Linux 2 (≥2.26-35), Amazon Linux 2023
+- Ubuntu (≥18.04), Debian (≥10), Alpine (≥3.12.7)
+- RHEL (≥8.2), CentOS (≥8.2), AlmaLinux (≥8.4), Rocky Linux (≥8.4)
+- SUSE (≥15.2), Flatcar (≥3033.2.0), FreeBSD (≥12.1)
+
+**Behavior based on OS detection:**
+
+| OS Status | System Packages | Application Packages |
+|-----------|----------------|---------------------|
+| Graviton-compatible OS | Marked `compatible` (confidence 0.95) | Full KB + runtime analysis |
+| Unknown/unsupported OS | Marked `unknown` (confidence 0.3) | Full KB + runtime analysis |
+| OS not detected | Marked `unknown` | Full KB + runtime analysis |
+
+**Key point:** Analysis never stops due to OS incompatibility. Application-level components always go through full knowledge base matching and runtime analysis regardless of OS status. Only system package status is affected.
 
 ### Step 4: Component Analysis
 ```

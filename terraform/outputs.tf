@@ -77,7 +77,12 @@ output "cloudwatch_log_group_lambda" {
 
 output "dashboard_url" {
   description = "CloudWatch dashboard URL"
-  value       = var.enable_cloudwatch_dashboard ? "https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${aws_cloudwatch_dashboard.main[0].dashboard_name}" : "Dashboard not enabled"
+  value       = var.enable_cloudwatch_dashboard ? "https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards/dashboard/${aws_cloudwatch_dashboard.main[0].dashboard_name}" : "Dashboard not enabled"
+}
+
+output "batch_console_url" {
+  description = "AWS Batch console URL filtered to this deployment's job queue"
+  value       = "https://${var.aws_region}.console.aws.amazon.com/batch/home?region=${var.aws_region}#jobs?jobQueue=${aws_batch_job_queue.main.arn}"
 }
 
 # Usage Instructions
@@ -91,7 +96,8 @@ output "usage_instructions" {
     
     📦 S3 Bucket: ${aws_s3_bucket.main.id}
     🔧 Batch Queue: ${aws_batch_job_queue.main.name}
-    📊 Dashboard: https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${var.enable_cloudwatch_dashboard ? aws_cloudwatch_dashboard.main[0].dashboard_name : "not-enabled"}
+    📊 Dashboard: https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards/dashboard/${var.enable_cloudwatch_dashboard ? aws_cloudwatch_dashboard.main[0].dashboard_name : "not-enabled"}
+    🖥️  Batch Jobs: https://${var.aws_region}.console.aws.amazon.com/batch/home?region=${var.aws_region}#jobs?jobQueue=${aws_batch_job_queue.main.arn}
     
     ⚠️  CRITICAL: Enable S3 EventBridge notifications (required):
     

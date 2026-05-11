@@ -22,9 +22,9 @@ class AnalysisCache:
         self._misses = 0
     
     def _make_key(self, name: str, version: str, component_type: str, detected_os: str = "") -> str:
-        """Create a cache key from component attributes."""
+        """Create a cache key from component attributes. MD5 is used only for key hashing, not for security."""
         raw = f"{name}|{version}|{component_type}|{detected_os}"
-        return hashlib.md5(raw.encode()).hexdigest()
+        return hashlib.md5(raw.encode()).hexdigest()  # nosec B324
     
     def get(self, name: str, version: str, component_type: str, detected_os: str = "") -> Optional[Dict]:
         """Look up cached result. Returns None on miss."""
